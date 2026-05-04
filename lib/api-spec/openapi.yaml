@@ -3,20 +3,28 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Jewelry Price Calculator API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication operations
+  - name: metalPrices
+    description: Metal price management
+  - name: calculator
+    description: Jewelry price calculation
+  - name: history
+    description: Price calculation history
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,7 +32,199 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login with username and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user info
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/change-password:
+    post:
+      operationId: changePassword
+      tags: [auth]
+      summary: Change user password
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordRequest"
+      responses:
+        "200":
+          description: Password changed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /metal-prices:
+    get:
+      operationId: getMetalPrices
+      tags: [metalPrices]
+      summary: Get all metal prices
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of metal prices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MetalPrice"
+
+  /metal-prices/{id}:
+    put:
+      operationId: updateMetalPrice
+      tags: [metalPrices]
+      summary: Update a metal price (Admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMetalPriceRequest"
+      responses:
+        "200":
+          description: Updated metal price
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetalPrice"
+        "403":
+          description: Forbidden - Admin only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /calculator/calculate:
+    post:
+      operationId: calculatePrice
+      tags: [calculator]
+      summary: Calculate jewelry price
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CalculateRequest"
+      responses:
+        "200":
+          description: Price breakdown
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalculateResponse"
+
+  /history:
+    get:
+      operationId: getPriceHistory
+      tags: [history]
+      summary: Get price calculation history for current user
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Price history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PriceHistoryResponse"
+
+  /history/stats:
+    get:
+      operationId: getHistoryStats
+      tags: [history]
+      summary: Get aggregated stats from calculation history
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Aggregated history stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HistoryStats"
+
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
   schemas:
     HealthStatus:
       type: object
@@ -34,3 +234,233 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    SuccessResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required:
+        - message
+
+    LoginRequest:
+      type: object
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+      required:
+        - username
+        - password
+
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        user:
+          $ref: "#/components/schemas/User"
+        requiresPasswordChange:
+          type: boolean
+      required:
+        - token
+        - user
+        - requiresPasswordChange
+
+    ChangePasswordRequest:
+      type: object
+      properties:
+        currentPassword:
+          type: string
+        newPassword:
+          type: string
+      required:
+        - currentPassword
+        - newPassword
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        role:
+          type: string
+          enum: [admin, user]
+        requiresPasswordChange:
+          type: boolean
+      required:
+        - id
+        - username
+        - role
+        - requiresPasswordChange
+
+    MetalPrice:
+      type: object
+      properties:
+        id:
+          type: integer
+        metalType:
+          type: string
+          enum: [gold, silver, platinum]
+        purity:
+          type: string
+          enum: ["10K", "14K", "18K", "standard"]
+        pricePerUnit:
+          type: number
+        updatedAt:
+          type: string
+      required:
+        - id
+        - metalType
+        - purity
+        - pricePerUnit
+        - updatedAt
+
+    UpdateMetalPriceRequest:
+      type: object
+      properties:
+        pricePerUnit:
+          type: number
+      required:
+        - pricePerUnit
+
+    CalculateRequest:
+      type: object
+      properties:
+        metalType:
+          type: string
+          enum: [gold, silver, platinum]
+        purity:
+          type: string
+          enum: ["10K", "14K", "18K", "standard"]
+        metalWeight:
+          type: number
+        centerDiamondWeight:
+          type: number
+        sideDiamondWeight:
+          type: number
+        saveToHistory:
+          type: boolean
+      required:
+        - metalType
+        - purity
+        - metalWeight
+        - centerDiamondWeight
+        - sideDiamondWeight
+
+    CalculateResponse:
+      type: object
+      properties:
+        metalPrice:
+          type: number
+        centerDiamondPrice:
+          type: number
+        sideDiamondPrice:
+          type: number
+        labourCost:
+          type: number
+        subtotal:
+          type: number
+        additionalCharge:
+          type: number
+        totalPrice:
+          type: number
+        inputs:
+          $ref: "#/components/schemas/CalculateRequest"
+      required:
+        - metalPrice
+        - centerDiamondPrice
+        - sideDiamondPrice
+        - labourCost
+        - subtotal
+        - additionalCharge
+        - totalPrice
+        - inputs
+
+    PriceHistoryItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        timestamp:
+          type: string
+        metalType:
+          type: string
+        purity:
+          type: string
+        metalWeight:
+          type: number
+        centerDiamondWeight:
+          type: number
+        sideDiamondWeight:
+          type: number
+        totalPrice:
+          type: number
+        breakdown:
+          type: object
+          additionalProperties: true
+      required:
+        - id
+        - userId
+        - timestamp
+        - metalType
+        - purity
+        - metalWeight
+        - centerDiamondWeight
+        - sideDiamondWeight
+        - totalPrice
+
+    PriceHistoryResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PriceHistoryItem"
+        total:
+          type: integer
+      required:
+        - items
+        - total
+
+    HistoryStats:
+      type: object
+      properties:
+        totalCalculations:
+          type: integer
+        averagePrice:
+          type: number
+        topMetalType:
+          type: string
+        totalByMetal:
+          type: array
+          items:
+            type: object
+            properties:
+              metalType:
+                type: string
+              count:
+                type: integer
+              avgPrice:
+                type: number
+            required:
+              - metalType
+              - count
+              - avgPrice
+      required:
+        - totalCalculations
+        - averagePrice
+        - topMetalType
+        - totalByMetal

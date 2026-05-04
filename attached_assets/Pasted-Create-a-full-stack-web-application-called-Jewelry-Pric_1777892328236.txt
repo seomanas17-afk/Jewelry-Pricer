@@ -1,0 +1,91 @@
+Create a full-stack web application called Jewelry Price Calculator that calculates jewelry pricing based on metal type, purity, metal weight, and diamond weights. The application must include authentication and role-based authorization so that only one Admin user can modify static metal prices, while normal users can only calculate prices.
+
+Use a modern full-stack architecture suitable for Replit deployment. Use Node.js with Express for the backend and React for the frontend. Use SQLite or PostgreSQL as the database. Implement JWT-based authentication. The UI should be clean, responsive, and optimized for fast input during daily jewelry pricing operations.
+
+The application must support login authentication. There will be two roles: Admin and User. The Admin role has permission to update static metal prices, Labour charges and diamond prices per carat.Metal purity will be included only in Gold and should not include in silver and platinum. The User role cannot modify metal prices and can only input jewelry details to calculate the total price.
+
+Create a secure authentication system where Admin credentials are predefined in the database. Only the Admin can access the metal price configuration panel. Users can access only the calculator interface.
+
+The system must support three metal categories: Gold, Silver, and Platinum. Each metal category must have three purity subcategories: 10K, 14K, and 18K.
+
+Store static metal prices separately for each metal category and purity combination. These static prices must be editable only by the Admin user through a protected admin panel. All users will use these stored static prices in their calculations.
+
+Create a jewelry price calculator form where the user selects Metal Type from Gold, Silver, or Platinum. Then selects Purity from 10K, 14K, or 18K. The user must enter Metal Weight in grams. The user must enter Center Diamond Weight in carats. The user must enter Side Diamond Weight in carats.
+
+All calculations must follow the exact formulas below.
+
+For 10K purity:
+
+Total Metal Price = Static Metal Price * 0.45 * Metal Weight / 75
+
+Center Diamond Price = Center Diamond Weight * 180
+
+Side Diamond Price = Side Diamond Weight * 180
+
+Labour = 25 * Metal Weight
+
+Total Price = Total Metal Price + Center Diamond Price + Side Diamond Price + Labour + 10% of subtotal
+
+Profile equals Total Price
+
+For 14K purity:
+
+Total Metal Price = Static Metal Price * 0.65 * Metal Weight / 75
+
+Center Diamond Price = Center Diamond Weight * 180
+
+Side Diamond Price = Side Diamond Weight * 180
+
+Labour = 25 * Metal Weight
+
+Total Price = Total Metal Price + Center Diamond Price + Side Diamond Price + Labour + 10% of subtotal
+
+Profile equals Total Price
+
+For 18K purity:
+
+Total Metal Price = Static Metal Price * 0.75 * Metal Weight / 75
+
+Center Diamond Price = Center Diamond Weight * 180
+
+Side Diamond Price = Side Diamond Weight * 180
+
+Labour = 25 * Metal Weight
+
+Total Price = Total Metal Price + Center Diamond Price + Side Diamond Price + Labour + 10% of subtotal
+
+Profile equals Total Price
+
+The application must display a complete price breakdown showing Total Metal Price, Center Diamond Price, Side Diamond Price, Labour Cost, Additional 10 percent charge, and Final Total Price.
+
+The UI must include dropdown menus for Metal Type and Purity selection. Numeric input fields must be validated so only valid positive numbers are accepted. Calculations must update instantly when inputs change or when the Calculate button is clicked.
+
+Admin functionality must include a protected dashboard page where Admin can update static metal prices individually for each combination such as Gold 10K, Gold 14K, Gold 18K, Silver, Platinum. These values must persist in the database.
+
+Implement proper validation, error handling, and input sanitization. Protect all API endpoints using authentication middleware. Ensure only the Admin role can update metal prices.
+
+Create database tables structured as follows.
+
+Users table with fields id, username, password_hash, role
+
+MetalPrices table with fields id, metal_type, purity, price_per_unit
+
+PriceHistory table optional but recommended with fields id, user_id, timestamp, metal_type, purity, metal_weight, center_diamond_weight, side_diamond_weight, total_price
+
+The frontend must include the following screens.
+
+Login screen
+
+Calculator screen for users
+
+Admin dashboard for metal price management
+
+Display responsive layout suitable for desktop and tablet usage.
+
+Include comments in backend and frontend code explaining calculation logic and authentication flow.
+
+Ensure the application runs fully inside Replit with environment variables used for JWT secret and database connection.
+
+After generating the code, automatically create sample Admin credentials with username admin and password admin123 and require password change on first login.
+
+Make sure the application is production-ready, modular, secure, and optimized for quick daily jewelry pricing workflows. 
