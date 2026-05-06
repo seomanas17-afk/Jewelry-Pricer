@@ -7,20 +7,30 @@ import { CalculatePriceBody } from "@workspace/api-zod";
 const router = Router();
 
 /**
- * Calculation formula:
+ * Purity factors (karat / 24):
+ *   10K → 10/24 ≈ 0.4167
+ *   14K → 14/24 ≈ 0.5833
+ *   18K → 18/24 = 0.7500
  *
- * metalValue        = metalWeight * metalPricePerUnit (by metalType + purity)
- * centerDiamond     = centerDiamondWeight * diamondPricePerCarat
- * sideDiamond       = sideDiamondWeight * diamondPricePerCarat
- * labourCost        = labourChargePerGram * metalWeight
- * subtotal          = metalValue + centerDiamond + sideDiamond + labourCost
- * handlingCharge    = subtotal * (handlingChargePercent / 100)
- * cadDesignCharge   = cadDesignCharges ? cadDesignChargeAmount : 0
- * grandTotal        = subtotal + handlingCharge + cadDesignCharge
+ * Admin sets a single BASE price per gram for each metal (purity = "standard").
+ * The calculator applies the purity factor to that base price:
+ *   effectivePricePerGram = basePricePerGram × (karat / 24)
+ *   metalValue            = metalWeight × effectivePricePerGram
  *
- * Gold uses purity = "standard" (no purity selection needed in UI).
- * Silver and Platinum use purity = e.g. "10K", "14K", "18K", "24K".
+ * Full formula:
+ *   labourCost     = labourChargePerGram × metalWeight
+ *   subtotal       = metalValue + centerDiamondPrice + sideDiamondPrice + labourCost
+ *   handlingCharge = subtotal × (handlingChargePercent / 100)
+ *   cadCharge      = cadDesignCharges ? cadDesignChargeAmount : 0
+ *   grandTotal     = subtotal + handlingCharge + cadCharge
  */
+
+const PURITY_FACTORS: Record<string, number> = {
+  "10K": 10 / 24,
+  "14K": 14 / 24,
+  "18K": 18 / 24,
+};
+
 router.post("/calculate", requireAuth, async (req, res) => {
   const parsed = CalculatePriceBody.safeParse(req.body);
   if (!parsed.success) {
@@ -31,23 +41,23 @@ router.post("/calculate", requireAuth, async (req, res) => {
   const { metalType, metalPurity, metalWeight, centerDiamondWeight, sideDiamondWeight, cadDesignCharges, saveToHistory } =
     parsed.data;
 
-  // Determine purity to look up
-  const resolvedPurity = metalType === "gold" ? "standard" : (metalPurity ?? "");
-
-  if (metalType !== "gold" && !resolvedPurity) {
-    res.status(400).json({ error: "metalPurity is required for silver and platinum." });
+  // Purity is required for all metals
+  if (!metalPurity || !(metalPurity in PURITY_FACTORS)) {
+    res.status(400).json({ error: "metalPurity must be one of: 10K, 14K, 18K" });
     return;
   }
 
-  // Fetch metal price
+  const purityFactor = PURITY_FACTORS[metalPurity];
+
+  // Fetch the base (standard) price for the selected metal
   const [metalPriceRow] = await db
     .select()
     .from(metalPricesTable)
-    .where(and(eq(metalPricesTable.metalType, metalType), eq(metalPricesTable.purity, resolvedPurity)));
+    .where(and(eq(metalPricesTable.metalType, metalType), eq(metalPricesTable.purity, "standard")));
 
   if (!metalPriceRow) {
     res.status(400).json({
-      error: `Price for ${metalType}${resolvedPurity ? ` (${resolvedPurity})` : ""} not configured. Please contact admin.`,
+      error: `Base price for ${metalType} not configured. Please contact admin.`,
     });
     return;
   }
@@ -59,14 +69,15 @@ router.post("/calculate", requireAuth, async (req, res) => {
     return row ? parseFloat(row.value) : fallback;
   };
 
-  const metalPricePerUnit = parseFloat(metalPriceRow.pricePerUnit);
+  const basePricePerGram = parseFloat(metalPriceRow.pricePerUnit);
+  const effectivePricePerGram = basePricePerGram * purityFactor;
   const labourRatePerGram = getSetting("labour_charge_per_gram", 25);
   const diamondPricePerCarat = getSetting("diamond_price_per_carat", 180);
   const cadDesignChargeAmount = getSetting("cad_design_charge", 80);
   const handlingChargePercent = getSetting("handling_charge_percent", 5);
 
   // Apply formulas
-  const metalValue = metalWeight * metalPricePerUnit;
+  const metalValue = metalWeight * effectivePricePerGram;
   const centerDiamondPrice = centerDiamondWeight * diamondPricePerCarat;
   const sideDiamondPrice = sideDiamondWeight * diamondPricePerCarat;
   const labourCost = labourRatePerGram * metalWeight;
@@ -77,8 +88,8 @@ router.post("/calculate", requireAuth, async (req, res) => {
 
   const breakdown = {
     metalValue,
-    metalPricePerUnit,
-    metalPurity: resolvedPurity,
+    metalPricePerUnit: effectivePricePerGram,
+    metalPurity,
     centerDiamondPrice,
     sideDiamondPrice,
     labourCost,
@@ -91,7 +102,7 @@ router.post("/calculate", requireAuth, async (req, res) => {
     diamondPricePerCarat,
     inputs: {
       metalType,
-      metalPurity: resolvedPurity,
+      metalPurity,
       metalWeight,
       centerDiamondWeight,
       sideDiamondWeight,
@@ -103,7 +114,7 @@ router.post("/calculate", requireAuth, async (req, res) => {
     await db.insert(priceHistoryTable).values({
       userId: req.user!.userId,
       metalType,
-      purity: resolvedPurity,
+      purity: metalPurity,
       metalWeight: String(metalWeight),
       centerDiamondWeight: String(centerDiamondWeight),
       sideDiamondWeight: String(sideDiamondWeight),

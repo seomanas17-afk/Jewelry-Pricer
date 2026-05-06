@@ -22,6 +22,12 @@ import { Separator } from "@/components/ui/separator";
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
 
+const METAL_DISPLAY: Record<string, { label: string; badge: string; description: string }> = {
+  gold:     { label: "Gold",     badge: "bg-yellow-500/10 text-yellow-700 border-yellow-500/30", description: "Base price per gram (pure). Purity factor applied in calculator." },
+  silver:   { label: "Silver",   badge: "bg-slate-400/10 text-slate-600 border-slate-400/30",   description: "Base price per gram (pure). Purity factor applied in calculator." },
+  platinum: { label: "Platinum", badge: "bg-blue-400/10 text-blue-700 border-blue-400/30",       description: "Base price per gram (pure). Purity factor applied in calculator." },
+};
+
 function EditableRow({
   label,
   description,
@@ -44,10 +50,7 @@ function EditableRow({
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState("");
 
-  const handleEdit = () => {
-    setValue(currentValue.toString());
-    setEditing(true);
-  };
+  const handleEdit = () => { setValue(currentValue.toString()); setEditing(true); };
 
   const handleSave = () => {
     const num = parseFloat(value);
@@ -121,13 +124,6 @@ function EditableRow({
   );
 }
 
-const METAL_ORDER = ["gold", "silver", "platinum"];
-const METAL_BADGE_COLORS: Record<string, string> = {
-  gold: "bg-yellow-500/10 text-yellow-700 border-yellow-500/30",
-  silver: "bg-slate-400/10 text-slate-600 border-slate-400/30",
-  platinum: "bg-blue-400/10 text-blue-700 border-blue-400/30",
-};
-
 export default function AdminPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -135,26 +131,23 @@ export default function AdminPage() {
   const { data: metalPrices, isLoading: isLoadingPrices } = useGetMetalPrices({
     query: { queryKey: getGetMetalPricesQueryKey() },
   });
-
   const { data: stats, isLoading: isLoadingStats } = useGetHistoryStats({
     query: { queryKey: getGetHistoryStatsQueryKey() },
   });
-
   const { data: settings, isLoading: isLoadingSettings } = useGetSettings({
     query: { queryKey: getGetSettingsQueryKey() },
   });
 
   const updatePriceMutation = useUpdateMetalPrice();
-
   const [editingPriceId, setEditingPriceId] = useState<number | null>(null);
-  const [editPriceValue, setEditPriceValue] = useState<string>("");
+  const [editPriceValue, setEditPriceValue] = useState("");
 
   const handleEditPrice = (id: number, current: number) => {
     setEditingPriceId(id);
     setEditPriceValue(current.toString());
   };
 
-  const handleSavePrice = (id: number, metalType: string) => {
+  const handleSavePrice = (id: number, label: string) => {
     const num = parseFloat(editPriceValue);
     if (isNaN(num) || num <= 0) {
       toast({ title: "Invalid Price", description: "Enter a valid positive number.", variant: "destructive" });
@@ -164,7 +157,7 @@ export default function AdminPage() {
       { id, data: { pricePerUnit: num } },
       {
         onSuccess: () => {
-          toast({ title: "Price Updated", description: `${metalType} rate saved successfully.` });
+          toast({ title: "Price Updated", description: `${label} base price saved.` });
           queryClient.invalidateQueries({ queryKey: getGetMetalPricesQueryKey() });
           setEditingPriceId(null);
         },
@@ -177,11 +170,10 @@ export default function AdminPage() {
 
   const invalidateSettings = () => queryClient.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
 
-  // Group prices by metal type
-  const pricesByMetal = METAL_ORDER.reduce<Record<string, typeof metalPrices>>((acc, metal) => {
-    acc[metal] = metalPrices?.filter((p) => p.metalType === metal) ?? [];
-    return acc;
-  }, {});
+  // Only show the 'standard' entry for each metal (one row per metal)
+  const standardPrices = ["gold", "silver", "platinum"]
+    .map((metal) => metalPrices?.find((p) => p.metalType === metal && p.purity === "standard"))
+    .filter(Boolean) as NonNullable<typeof metalPrices>[number][];
 
   return (
     <div className="space-y-8 max-w-5xl mx-auto">
@@ -205,7 +197,6 @@ export default function AdminPage() {
             </div>
           </CardContent>
         </Card>
-
         <Card className="border-border shadow-sm">
           <CardContent className="p-6 flex items-center justify-between">
             <div>
@@ -219,7 +210,6 @@ export default function AdminPage() {
             </div>
           </CardContent>
         </Card>
-
         <Card className="border-border shadow-sm">
           <CardContent className="p-6 flex items-center justify-between">
             <div>
@@ -235,7 +225,7 @@ export default function AdminPage() {
         </Card>
       </div>
 
-      {/* Metal Prices — all three metals */}
+      {/* Metal Prices — one row per metal */}
       <Card className="border-border shadow-md">
         <CardHeader className="bg-muted/30 border-b">
           <CardTitle className="flex items-center">
@@ -243,15 +233,15 @@ export default function AdminPage() {
             Metal Price Configuration
           </CardTitle>
           <CardDescription>
-            Set prices per gram for each metal and purity. Gold uses a single standard price; silver and platinum support multiple purities (10K, 14K, 18K, 24K).
+            Set the base price per gram for each metal. The calculator automatically applies the karat purity factor (10K = 41.67%, 14K = 58.33%, 18K = 75%).
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/50 hover:bg-muted/50">
-                <TableHead>Metal / Purity</TableHead>
-                <TableHead>Price / gram</TableHead>
+                <TableHead>Metal</TableHead>
+                <TableHead>Base Price / gram (pure)</TableHead>
                 <TableHead>Last Updated</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -263,23 +253,21 @@ export default function AdminPage() {
                     <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" />
                   </TableCell>
                 </TableRow>
+              ) : standardPrices.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center py-6 text-muted-foreground">No metal prices configured.</TableCell>
+                </TableRow>
               ) : (
-                METAL_ORDER.map((metal) => {
-                  const entries = pricesByMetal[metal] ?? [];
-                  if (entries.length === 0) return null;
-                  return entries.map((price, idx) => (
+                standardPrices.map((price) => {
+                  const meta = METAL_DISPLAY[price.metalType] ?? { label: price.metalType, badge: "", description: "" };
+                  return (
                     <TableRow key={price.id} className="group">
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">
-                          {idx === 0 && (
-                            <Badge variant="outline" className={`capitalize text-xs ${METAL_BADGE_COLORS[metal]}`}>
-                              {metal}
-                            </Badge>
-                          )}
-                          {idx > 0 && <span className="w-[56px]" />}
-                          <span className="text-sm text-muted-foreground">
-                            {price.purity === "standard" ? "Standard (per gram)" : price.purity}
-                          </span>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          <Badge variant="outline" className={`w-fit capitalize text-xs ${meta.badge}`}>
+                            {meta.label}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">{meta.description}</span>
                         </div>
                       </TableCell>
                       <TableCell>
@@ -294,7 +282,7 @@ export default function AdminPage() {
                               className="h-8 font-mono bg-background"
                               autoFocus
                               onKeyDown={(e) => {
-                                if (e.key === "Enter") handleSavePrice(price.id, metal);
+                                if (e.key === "Enter") handleSavePrice(price.id, meta.label);
                                 if (e.key === "Escape") setEditingPriceId(null);
                               }}
                             />
@@ -310,7 +298,7 @@ export default function AdminPage() {
                         {editingPriceId === price.id ? (
                           <div className="flex justify-end gap-2">
                             <Button variant="ghost" size="sm" onClick={() => setEditingPriceId(null)}>Cancel</Button>
-                            <Button size="sm" onClick={() => handleSavePrice(price.id, metal)} disabled={updatePriceMutation.isPending}>
+                            <Button size="sm" onClick={() => handleSavePrice(price.id, meta.label)} disabled={updatePriceMutation.isPending}>
                               {updatePriceMutation.isPending && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
                               Save
                             </Button>
@@ -322,7 +310,7 @@ export default function AdminPage() {
                         )}
                       </TableCell>
                     </TableRow>
-                  ));
+                  );
                 })
               )}
             </TableBody>
