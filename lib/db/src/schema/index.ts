@@ -2,7 +2,7 @@ import { pgTable, serial, text, timestamp, numeric, integer, boolean, json } fro
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
-// Users table: stores credentials and roles
+// Users table
 export const usersTable = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
@@ -16,12 +16,11 @@ export const insertUserSchema = createInsertSchema(usersTable).omit({ id: true, 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof usersTable.$inferSelect;
 
-// MetalPrices table: stores static prices per metal/purity combo
-// Gold: 10K, 14K, 18K; Silver: standard; Platinum: standard
+// MetalPrices table — Gold only (purity = 'standard', price per gram)
 export const metalPricesTable = pgTable("metal_prices", {
   id: serial("id").primaryKey(),
   metalType: text("metal_type", { enum: ["gold", "silver", "platinum"] }).notNull(),
-  purity: text("purity").notNull(), // "10K", "14K", "18K", "standard"
+  purity: text("purity").notNull().default("standard"),
   pricePerUnit: numeric("price_per_unit", { precision: 12, scale: 4 }).notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -30,18 +29,30 @@ export const insertMetalPriceSchema = createInsertSchema(metalPricesTable).omit(
 export type InsertMetalPrice = z.infer<typeof insertMetalPriceSchema>;
 export type MetalPrice = typeof metalPricesTable.$inferSelect;
 
-// PriceHistory table: records of every calculation performed
+// AppSettings table — key-value store for admin-editable settings
+export const appSettingsTable = pgTable("app_settings", {
+  id: serial("id").primaryKey(),
+  key: text("key").notNull().unique(),
+  value: numeric("value", { precision: 12, scale: 4 }).notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertAppSettingSchema = createInsertSchema(appSettingsTable).omit({ id: true, updatedAt: true });
+export type InsertAppSetting = z.infer<typeof insertAppSettingSchema>;
+export type AppSetting = typeof appSettingsTable.$inferSelect;
+
+// PriceHistory table
 export const priceHistoryTable = pgTable("price_history", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull().references(() => usersTable.id),
   timestamp: timestamp("timestamp").defaultNow().notNull(),
   metalType: text("metal_type").notNull(),
-  purity: text("purity").notNull(),
+  purity: text("purity").notNull().default("standard"),
   metalWeight: numeric("metal_weight", { precision: 10, scale: 4 }).notNull(),
   centerDiamondWeight: numeric("center_diamond_weight", { precision: 10, scale: 4 }).notNull(),
   sideDiamondWeight: numeric("side_diamond_weight", { precision: 10, scale: 4 }).notNull(),
   totalPrice: numeric("total_price", { precision: 14, scale: 4 }).notNull(),
-  breakdown: json("breakdown").notNull(), // full price breakdown snapshot
+  breakdown: json("breakdown").notNull(),
 });
 
 export const insertPriceHistorySchema = createInsertSchema(priceHistoryTable).omit({ id: true, timestamp: true });

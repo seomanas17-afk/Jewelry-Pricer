@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, metalPricesTable, priceHistoryTable } from "@workspace/db";
+import { db, metalPricesTable, priceHistoryTable, appSettingsTable } from "@workspace/db";
 import { and, eq } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth.js";
 import { CalculatePriceBody } from "@workspace/api-zod";
@@ -7,24 +7,17 @@ import { CalculatePriceBody } from "@workspace/api-zod";
 const router = Router();
 
 /**
- * Calculate jewelry price using the defined formulas.
+ * New calculation formula (simplified to Gold only):
  *
- * Purity multipliers:
- *   10K → 0.45, 14K → 0.65, 18K → 0.75, standard → 1.0
- *
- * Total Metal Price = staticPrice * multiplier * metalWeight / 75
- * Center Diamond Price = centerDiamondWeight * 180
- * Side Diamond Price = sideDiamondWeight * 180
- * Labour = 25 * metalWeight
- * Subtotal = metalPrice + centerDiamondPrice + sideDiamondPrice + labour
- * Additional Charge = subtotal * 0.10
- * Total = subtotal + additionalCharge
+ * goldValue         = goldWeight * goldPricePerGram
+ * centerDiamond     = centerDiamondWeight * diamondPricePerCarat
+ * sideDiamond       = sideDiamondWeight * diamondPricePerCarat
+ * labourCost        = labourChargePerGram * goldWeight
+ * subtotal          = goldValue + centerDiamond + sideDiamond + labourCost
+ * handlingCharge    = subtotal * 0.05  (5%)
+ * cadDesignCharge   = cadDesignCharges ? cadDesignChargeAmount : 0
+ * grandTotal        = subtotal + handlingCharge + cadDesignCharge
  */
-function getPurityMultiplier(purity: string): number {
-  const map: Record<string, number> = { "10K": 0.45, "14K": 0.65, "18K": 0.75, standard: 1.0 };
-  return map[purity] ?? 1.0;
-}
-
 router.post("/calculate", requireAuth, async (req, res) => {
   const parsed = CalculatePriceBody.safeParse(req.body);
   if (!parsed.success) {
@@ -32,49 +25,63 @@ router.post("/calculate", requireAuth, async (req, res) => {
     return;
   }
 
-  const { metalType, purity, metalWeight, centerDiamondWeight, sideDiamondWeight, saveToHistory } = parsed.data;
+  const { goldWeight, centerDiamondWeight, sideDiamondWeight, cadDesignCharges, saveToHistory } = parsed.data;
 
-  // Fetch static price for this metal/purity combo
-  const [metalPriceRow] = await db
+  // Fetch gold price per gram
+  const [goldPriceRow] = await db
     .select()
     .from(metalPricesTable)
-    .where(and(eq(metalPricesTable.metalType, metalType), eq(metalPricesTable.purity, purity)));
+    .where(and(eq(metalPricesTable.metalType, "gold"), eq(metalPricesTable.purity, "standard")));
 
-  if (!metalPriceRow) {
-    res.status(400).json({ error: `No price configured for ${metalType} ${purity}` });
+  if (!goldPriceRow) {
+    res.status(400).json({ error: "Gold price not configured. Please contact admin." });
     return;
   }
 
-  const staticPrice = parseFloat(metalPriceRow.pricePerUnit);
-  const multiplier = getPurityMultiplier(purity);
+  // Fetch app settings (labour rate, diamond price, CAD charge)
+  const settings = await db.select().from(appSettingsTable);
+  const getSetting = (key: string, fallback: number) => {
+    const row = settings.find((s) => s.key === key);
+    return row ? parseFloat(row.value) : fallback;
+  };
+
+  const goldPricePerGram = parseFloat(goldPriceRow.pricePerUnit);
+  const labourRatePerGram = getSetting("labour_charge_per_gram", 25);
+  const diamondPricePerCarat = getSetting("diamond_price_per_carat", 180);
+  const cadDesignChargeAmount = getSetting("cad_design_charge", 80);
 
   // Apply formulas
-  const metalPrice = staticPrice * multiplier * metalWeight / 75;
-  const centerDiamondPrice = centerDiamondWeight * 180;
-  const sideDiamondPrice = sideDiamondWeight * 180;
-  const labourCost = 25 * metalWeight;
-  const subtotal = metalPrice + centerDiamondPrice + sideDiamondPrice + labourCost;
-  const additionalCharge = subtotal * 0.10;
-  const totalPrice = subtotal + additionalCharge;
+  const goldValue = goldWeight * goldPricePerGram;
+  const centerDiamondPrice = centerDiamondWeight * diamondPricePerCarat;
+  const sideDiamondPrice = sideDiamondWeight * diamondPricePerCarat;
+  const labourCost = labourRatePerGram * goldWeight;
+  const subtotal = goldValue + centerDiamondPrice + sideDiamondPrice + labourCost;
+  const handlingCharge = subtotal * 0.05;
+  const cadDesignCharge = cadDesignCharges ? cadDesignChargeAmount : 0;
+  const totalPrice = subtotal + handlingCharge + cadDesignCharge;
 
   const breakdown = {
-    metalPrice,
+    goldValue,
     centerDiamondPrice,
     sideDiamondPrice,
     labourCost,
     subtotal,
-    additionalCharge,
+    handlingCharge,
+    cadDesignCharge,
     totalPrice,
-    inputs: { metalType, purity, metalWeight, centerDiamondWeight, sideDiamondWeight },
+    goldPricePerGram,
+    labourRatePerGram,
+    diamondPricePerCarat,
+    inputs: { goldWeight, centerDiamondWeight, sideDiamondWeight, cadDesignCharges: !!cadDesignCharges },
   };
 
-  // Optionally save to history
-  if (saveToHistory !== false) {
+  // Save to history if requested
+  if (saveToHistory === true) {
     await db.insert(priceHistoryTable).values({
       userId: req.user!.userId,
-      metalType,
-      purity,
-      metalWeight: String(metalWeight),
+      metalType: "gold",
+      purity: "standard",
+      metalWeight: String(goldWeight),
       centerDiamondWeight: String(centerDiamondWeight),
       sideDiamondWeight: String(sideDiamondWeight),
       totalPrice: String(totalPrice),

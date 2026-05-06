@@ -61,7 +61,7 @@ export const ChangePasswordResponse = zod.object({
 export const GetMetalPricesResponseItem = zod.object({
   id: zod.number(),
   metalType: zod.enum(["gold", "silver", "platinum"]),
-  purity: zod.enum(["10K", "14K", "18K", "standard"]),
+  purity: zod.string(),
   pricePerUnit: zod.number(),
   updatedAt: zod.string(),
 });
@@ -81,37 +81,89 @@ export const UpdateMetalPriceBody = zod.object({
 export const UpdateMetalPriceResponse = zod.object({
   id: zod.number(),
   metalType: zod.enum(["gold", "silver", "platinum"]),
-  purity: zod.enum(["10K", "14K", "18K", "standard"]),
+  purity: zod.string(),
   pricePerUnit: zod.number(),
   updatedAt: zod.string(),
+});
+
+/**
+ * @summary Get all app settings
+ */
+export const GetSettingsResponse = zod.object({
+  labourChargePerGram: zod.number().describe("Labour charge per gram of gold"),
+  diamondPricePerCarat: zod
+    .number()
+    .describe(
+      "Diamond price per carat (applied to both center and side diamonds)",
+    ),
+  cadDesignCharge: zod
+    .number()
+    .describe("Fixed CAD design charge amount when enabled"),
+});
+
+/**
+ * @summary Update a setting value (Admin only)
+ */
+export const UpdateSettingParams = zod.object({
+  key: zod.coerce.string(),
+});
+
+export const UpdateSettingBody = zod.object({
+  value: zod.number(),
+});
+
+export const UpdateSettingResponse = zod.object({
+  labourChargePerGram: zod.number().describe("Labour charge per gram of gold"),
+  diamondPricePerCarat: zod
+    .number()
+    .describe(
+      "Diamond price per carat (applied to both center and side diamonds)",
+    ),
+  cadDesignCharge: zod
+    .number()
+    .describe("Fixed CAD design charge amount when enabled"),
 });
 
 /**
  * @summary Calculate jewelry price
  */
 export const CalculatePriceBody = zod.object({
-  metalType: zod.enum(["gold", "silver", "platinum"]),
-  purity: zod.enum(["10K", "14K", "18K", "standard"]),
-  metalWeight: zod.number(),
-  centerDiamondWeight: zod.number(),
-  sideDiamondWeight: zod.number(),
+  goldWeight: zod.number().describe("Weight of gold in grams"),
+  centerDiamondWeight: zod.number().describe("Center diamond weight in carats"),
+  sideDiamondWeight: zod.number().describe("Side diamond weight in carats"),
+  cadDesignCharges: zod
+    .boolean()
+    .optional()
+    .describe("Whether to include CAD design charges ($80)"),
   saveToHistory: zod.boolean().optional(),
 });
 
 export const CalculatePriceResponse = zod.object({
-  metalPrice: zod.number(),
+  goldValue: zod.number().describe("Gold metal value (weight \* price\/gram)"),
   centerDiamondPrice: zod.number(),
   sideDiamondPrice: zod.number(),
   labourCost: zod.number(),
   subtotal: zod.number(),
-  additionalCharge: zod.number(),
-  totalPrice: zod.number(),
+  handlingCharge: zod.number().describe("5% of subtotal"),
+  cadDesignCharge: zod
+    .number()
+    .describe("Fixed CAD design charge if enabled ($80 or 0)"),
+  totalPrice: zod
+    .number()
+    .describe("Grand total = subtotal + handlingCharge + cadDesignCharge"),
+  goldPricePerGram: zod.number(),
+  labourRatePerGram: zod.number(),
+  diamondPricePerCarat: zod.number(),
   inputs: zod.object({
-    metalType: zod.enum(["gold", "silver", "platinum"]),
-    purity: zod.enum(["10K", "14K", "18K", "standard"]),
-    metalWeight: zod.number(),
-    centerDiamondWeight: zod.number(),
-    sideDiamondWeight: zod.number(),
+    goldWeight: zod.number().describe("Weight of gold in grams"),
+    centerDiamondWeight: zod
+      .number()
+      .describe("Center diamond weight in carats"),
+    sideDiamondWeight: zod.number().describe("Side diamond weight in carats"),
+    cadDesignCharges: zod
+      .boolean()
+      .optional()
+      .describe("Whether to include CAD design charges ($80)"),
     saveToHistory: zod.boolean().optional(),
   }),
 });

@@ -14,6 +14,8 @@ tags:
     description: Authentication operations
   - name: metalPrices
     description: Metal price management
+  - name: settings
+    description: App settings (labour, diamond price)
   - name: calculator
     description: Jewelry price calculation
   - name: history
@@ -149,6 +151,54 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MetalPrice"
+        "403":
+          description: Forbidden - Admin only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /settings:
+    get:
+      operationId: getSettings
+      tags: [settings]
+      summary: Get all app settings
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: App settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppSettings"
+
+  /settings/{key}:
+    put:
+      operationId: updateSetting
+      tags: [settings]
+      summary: Update a setting value (Admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSettingRequest"
+      responses:
+        "200":
+          description: Updated setting
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppSettings"
         "403":
           description: Forbidden - Admin only
           content:
@@ -314,7 +364,6 @@ components:
           enum: [gold, silver, platinum]
         purity:
           type: string
-          enum: ["10K", "14K", "18K", "standard"]
         pricePerUnit:
           type: number
         updatedAt:
@@ -334,35 +383,59 @@ components:
       required:
         - pricePerUnit
 
+    AppSettings:
+      type: object
+      properties:
+        labourChargePerGram:
+          type: number
+          description: Labour charge per gram of gold
+        diamondPricePerCarat:
+          type: number
+          description: Diamond price per carat (applied to both center and side diamonds)
+        cadDesignCharge:
+          type: number
+          description: Fixed CAD design charge amount when enabled
+      required:
+        - labourChargePerGram
+        - diamondPricePerCarat
+        - cadDesignCharge
+
+    UpdateSettingRequest:
+      type: object
+      properties:
+        value:
+          type: number
+      required:
+        - value
+
     CalculateRequest:
       type: object
       properties:
-        metalType:
-          type: string
-          enum: [gold, silver, platinum]
-        purity:
-          type: string
-          enum: ["10K", "14K", "18K", "standard"]
-        metalWeight:
+        goldWeight:
           type: number
+          description: Weight of gold in grams
         centerDiamondWeight:
           type: number
+          description: Center diamond weight in carats
         sideDiamondWeight:
           type: number
+          description: Side diamond weight in carats
+        cadDesignCharges:
+          type: boolean
+          description: Whether to include CAD design charges ($80)
         saveToHistory:
           type: boolean
       required:
-        - metalType
-        - purity
-        - metalWeight
+        - goldWeight
         - centerDiamondWeight
         - sideDiamondWeight
 
     CalculateResponse:
       type: object
       properties:
-        metalPrice:
+        goldValue:
           type: number
+          description: Gold metal value (weight * price/gram)
         centerDiamondPrice:
           type: number
         sideDiamondPrice:
@@ -371,20 +444,35 @@ components:
           type: number
         subtotal:
           type: number
-        additionalCharge:
+        handlingCharge:
           type: number
+          description: 5% of subtotal
+        cadDesignCharge:
+          type: number
+          description: Fixed CAD design charge if enabled ($80 or 0)
         totalPrice:
+          type: number
+          description: Grand total = subtotal + handlingCharge + cadDesignCharge
+        goldPricePerGram:
+          type: number
+        labourRatePerGram:
+          type: number
+        diamondPricePerCarat:
           type: number
         inputs:
           $ref: "#/components/schemas/CalculateRequest"
       required:
-        - metalPrice
+        - goldValue
         - centerDiamondPrice
         - sideDiamondPrice
         - labourCost
         - subtotal
-        - additionalCharge
+        - handlingCharge
+        - cadDesignCharge
         - totalPrice
+        - goldPricePerGram
+        - labourRatePerGram
+        - diamondPricePerCarat
         - inputs
 
     PriceHistoryItem:

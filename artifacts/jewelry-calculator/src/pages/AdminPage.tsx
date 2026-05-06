@@ -1,90 +1,191 @@
 import { useState } from "react";
-import { useGetMetalPrices, getGetMetalPricesQueryKey, useUpdateMetalPrice, useGetHistoryStats, getGetHistoryStatsQueryKey } from "@workspace/api-client-react";
-import { MetalPrice } from "@workspace/api-client-react/src/generated/api.schemas";
+import {
+  useGetMetalPrices,
+  getGetMetalPricesQueryKey,
+  useUpdateMetalPrice,
+  useGetHistoryStats,
+  getGetHistoryStatsQueryKey,
+  useGetSettings,
+  useUpdateSetting,
+  getGetSettingsQueryKey,
+} from "@workspace/api-client-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Loader2, Settings, TrendingUp, BarChart3, Database } from "lucide-react";
+import { Loader2, Settings, TrendingUp, BarChart3, Database, Wrench } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { Separator } from "@/components/ui/separator";
 
-const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
-};
+const formatCurrency = (value: number) =>
+  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
 
-export default function AdminPage() {
-  const queryClient = useQueryClient();
+// Reusable inline-edit row for any numeric setting
+function EditableRow({
+  label,
+  description,
+  currentValue,
+  unit,
+  settingKey,
+  onSaved,
+}: {
+  label: string;
+  description: string;
+  currentValue: number;
+  unit: string;
+  settingKey: string;
+  onSaved: () => void;
+}) {
   const { toast } = useToast();
-  
-  const { data: metalPrices, isLoading: isLoadingPrices } = useGetMetalPrices({
-    query: { queryKey: getGetMetalPricesQueryKey() }
-  });
+  const updateSettingMutation = useUpdateSetting();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState("");
 
-  const { data: stats, isLoading: isLoadingStats } = useGetHistoryStats({
-    query: { queryKey: getGetHistoryStatsQueryKey() }
-  });
-
-  const updatePriceMutation = useUpdateMetalPrice();
-  
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editValue, setEditValue] = useState<string>("");
-
-  const handleEdit = (price: MetalPrice) => {
-    setEditingId(price.id);
-    setEditValue(price.pricePerUnit.toString());
+  const handleEdit = () => {
+    setValue(currentValue.toString());
+    setEditing(true);
   };
 
-  const handleCancel = () => {
-    setEditingId(null);
-    setEditValue("");
-  };
-
-  const handleSave = (id: number) => {
-    const numValue = parseFloat(editValue);
-    if (isNaN(numValue) || numValue <= 0) {
-      toast({
-        title: "Invalid Price",
-        description: "Please enter a valid positive number.",
-        variant: "destructive"
-      });
+  const handleSave = () => {
+    const num = parseFloat(value);
+    if (isNaN(num) || num < 0) {
+      toast({ title: "Invalid Value", description: "Enter a valid non-negative number.", variant: "destructive" });
       return;
     }
-
-    updatePriceMutation.mutate(
-      { id, data: { pricePerUnit: numValue } },
+    updateSettingMutation.mutate(
+      { key: settingKey, data: { value: num } },
       {
         onSuccess: () => {
-          toast({ title: "Price Updated", description: "Market rate saved successfully." });
-          queryClient.invalidateQueries({ queryKey: getGetMetalPricesQueryKey() });
-          setEditingId(null);
+          toast({ title: "Saved", description: `${label} updated successfully.` });
+          setEditing(false);
+          onSaved();
         },
         onError: (error: any) => {
-          toast({
-            title: "Update Failed",
-            description: error?.data?.error || "Could not update price.",
-            variant: "destructive"
-          });
-        }
+          toast({ title: "Update Failed", description: error?.data?.error || "Could not update.", variant: "destructive" });
+        },
       }
     );
   };
 
   return (
-    <div className="space-y-8 max-w-6xl mx-auto">
+    <TableRow className="group">
+      <TableCell>
+        <div className="font-medium">{label}</div>
+        <div className="text-xs text-muted-foreground mt-0.5">{description}</div>
+      </TableCell>
+      <TableCell>
+        {editing ? (
+          <div className="flex items-center gap-2 max-w-[160px]">
+            <span className="text-muted-foreground text-sm">$</span>
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              className="h-8 font-mono bg-background"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSave();
+                if (e.key === "Escape") setEditing(false);
+              }}
+            />
+            <span className="text-muted-foreground text-xs whitespace-nowrap">{unit}</span>
+          </div>
+        ) : (
+          <span className="font-mono text-lg">
+            {formatCurrency(currentValue)}
+            <span className="text-xs text-muted-foreground ml-1">{unit}</span>
+          </span>
+        )}
+      </TableCell>
+      <TableCell className="text-right">
+        {editing ? (
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>Cancel</Button>
+            <Button size="sm" onClick={handleSave} disabled={updateSettingMutation.isPending}>
+              {updateSettingMutation.isPending && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
+              Save
+            </Button>
+          </div>
+        ) : (
+          <Button variant="outline" size="sm" onClick={handleEdit} className="opacity-0 group-hover:opacity-100 transition-opacity">
+            Update
+          </Button>
+        )}
+      </TableCell>
+    </TableRow>
+  );
+}
+
+export default function AdminPage() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const { data: metalPrices, isLoading: isLoadingPrices } = useGetMetalPrices({
+    query: { queryKey: getGetMetalPricesQueryKey() },
+  });
+
+  const { data: stats, isLoading: isLoadingStats } = useGetHistoryStats({
+    query: { queryKey: getGetHistoryStatsQueryKey() },
+  });
+
+  const { data: settings, isLoading: isLoadingSettings } = useGetSettings({
+    query: { queryKey: getGetSettingsQueryKey() },
+  });
+
+  const updatePriceMutation = useUpdateMetalPrice();
+
+  const [editingPriceId, setEditingPriceId] = useState<number | null>(null);
+  const [editPriceValue, setEditPriceValue] = useState<string>("");
+
+  const handleEditPrice = (id: number, current: number) => {
+    setEditingPriceId(id);
+    setEditPriceValue(current.toString());
+  };
+
+  const handleSavePrice = (id: number) => {
+    const num = parseFloat(editPriceValue);
+    if (isNaN(num) || num <= 0) {
+      toast({ title: "Invalid Price", description: "Enter a valid positive number.", variant: "destructive" });
+      return;
+    }
+    updatePriceMutation.mutate(
+      { id, data: { pricePerUnit: num } },
+      {
+        onSuccess: () => {
+          toast({ title: "Gold Price Updated", description: "Rate saved successfully." });
+          queryClient.invalidateQueries({ queryKey: getGetMetalPricesQueryKey() });
+          setEditingPriceId(null);
+        },
+        onError: (error: any) => {
+          toast({ title: "Update Failed", description: error?.data?.error || "Could not update.", variant: "destructive" });
+        },
+      }
+    );
+  };
+
+  const invalidateSettings = () => queryClient.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
+
+  // Show only the gold/standard entry
+  const goldPrices = metalPrices?.filter((p) => p.metalType === "gold") ?? [];
+
+  return (
+    <div className="space-y-8 max-w-5xl mx-auto">
       <div>
         <h1 className="text-3xl font-serif font-bold text-foreground">Admin Terminal</h1>
-        <p className="text-muted-foreground mt-1">Manage market rates and view system metrics.</p>
+        <p className="text-muted-foreground mt-1">Manage pricing rates and view system metrics.</p>
       </div>
 
+      {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card className="border-border shadow-sm">
           <CardContent className="p-6 flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-1">Total Quotes</p>
               <div className="text-3xl font-bold font-mono">
-                {isLoadingStats ? <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /> : stats?.totalCalculations || 0}
+                {isLoadingStats ? <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /> : stats?.totalCalculations ?? 0}
               </div>
             </div>
             <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center">
@@ -92,13 +193,13 @@ export default function AdminPage() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card className="border-border shadow-sm">
           <CardContent className="p-6 flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-1">Avg Quote Value</p>
+              <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-1">Avg Quote</p>
               <div className="text-3xl font-bold font-mono text-primary">
-                {isLoadingStats ? <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /> : formatCurrency(stats?.averagePrice || 0)}
+                {isLoadingStats ? <Loader2 className="w-6 h-6 animate-spin" /> : formatCurrency(stats?.averagePrice ?? 0)}
               </div>
             </div>
             <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center">
@@ -112,7 +213,7 @@ export default function AdminPage() {
             <div>
               <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-1">Top Metal</p>
               <div className="text-2xl font-bold capitalize">
-                {isLoadingStats ? <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /> : stats?.topMetalType || 'N/A'}
+                {isLoadingStats ? <Loader2 className="w-6 h-6 animate-spin" /> : stats?.topMetalType ?? "N/A"}
               </div>
             </div>
             <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center">
@@ -122,21 +223,21 @@ export default function AdminPage() {
         </Card>
       </div>
 
+      {/* Gold Price */}
       <Card className="border-border shadow-md">
         <CardHeader className="bg-muted/30 border-b">
           <CardTitle className="flex items-center">
             <Settings className="w-5 h-5 mr-2 text-primary" />
-            Market Rates Configuration
+            Gold Price Configuration
           </CardTitle>
-          <CardDescription>Update base metal prices per gram. Changes take effect immediately.</CardDescription>
+          <CardDescription>Set the gold price per gram. Used directly in all calculations.</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/50 hover:bg-muted/50">
-                <TableHead className="w-[150px]">Metal</TableHead>
-                <TableHead>Purity</TableHead>
-                <TableHead>Current Rate (/g)</TableHead>
+                <TableHead>Metal</TableHead>
+                <TableHead>Current Price / gram</TableHead>
                 <TableHead>Last Updated</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -144,70 +245,142 @@ export default function AdminPage() {
             <TableBody>
               {isLoadingPrices ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-12">
+                  <TableCell colSpan={4} className="text-center py-10">
                     <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" />
-                    <p className="text-muted-foreground mt-2">Loading market rates...</p>
                   </TableCell>
                 </TableRow>
-              ) : metalPrices?.map((price) => (
-                <TableRow key={price.id} className="group">
-                  <TableCell className="font-medium capitalize">{price.metalType}</TableCell>
-                  <TableCell>
-                    <Badge variant={price.purity === 'standard' ? "secondary" : "outline"}>
-                      {price.purity}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {editingId === price.id ? (
-                      <div className="flex items-center max-w-[150px]">
-                        <span className="text-muted-foreground mr-2">$</span>
-                        <Input 
-                          type="number" 
-                          step="0.01" 
-                          value={editValue} 
-                          onChange={(e) => setEditValue(e.target.value)}
-                          className="h-8 font-mono bg-background"
-                          autoFocus
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleSave(price.id);
-                            if (e.key === 'Escape') handleCancel();
-                          }}
-                        />
-                      </div>
-                    ) : (
-                      <span className="font-mono text-lg">{formatCurrency(price.pricePerUnit)}</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {new Date(price.updatedAt).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {editingId === price.id ? (
-                      <div className="flex justify-end gap-2">
-                        <Button variant="ghost" size="sm" onClick={handleCancel}>Cancel</Button>
-                        <Button 
-                          size="sm" 
-                          onClick={() => handleSave(price.id)}
-                          disabled={updatePriceMutation.isPending}
-                        >
-                          {updatePriceMutation.isPending && updatePriceMutation.variables?.id === price.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                          ) : null}
-                          Save
+              ) : goldPrices.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center py-6 text-muted-foreground">No gold price configured.</TableCell>
+                </TableRow>
+              ) : (
+                goldPrices.map((price) => (
+                  <TableRow key={price.id} className="group">
+                    <TableCell className="font-medium capitalize">Gold (per gram)</TableCell>
+                    <TableCell>
+                      {editingPriceId === price.id ? (
+                        <div className="flex items-center gap-2 max-w-[160px]">
+                          <span className="text-muted-foreground">$</span>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={editPriceValue}
+                            onChange={(e) => setEditPriceValue(e.target.value)}
+                            className="h-8 font-mono bg-background"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleSavePrice(price.id);
+                              if (e.key === "Escape") setEditingPriceId(null);
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <span className="font-mono text-lg">{formatCurrency(price.pricePerUnit)}</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {new Date(price.updatedAt).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {editingPriceId === price.id ? (
+                        <div className="flex justify-end gap-2">
+                          <Button variant="ghost" size="sm" onClick={() => setEditingPriceId(null)}>Cancel</Button>
+                          <Button size="sm" onClick={() => handleSavePrice(price.id)} disabled={updatePriceMutation.isPending}>
+                            {updatePriceMutation.isPending && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
+                            Save
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button variant="outline" size="sm" onClick={() => handleEditPrice(price.id, price.pricePerUnit)} className="opacity-0 group-hover:opacity-100 transition-opacity">
+                          Update Rate
                         </Button>
-                      </div>
-                    ) : (
-                      <Button variant="outline" size="sm" onClick={() => handleEdit(price)} className="opacity-0 group-hover:opacity-100 transition-opacity">
-                        Update Rate
-                      </Button>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
+
+      {/* Charges Configuration */}
+      <Card className="border-border shadow-md">
+        <CardHeader className="bg-muted/30 border-b">
+          <CardTitle className="flex items-center">
+            <Wrench className="w-5 h-5 mr-2 text-primary" />
+            Charges Configuration
+          </CardTitle>
+          <CardDescription>
+            Set labour charges, diamond pricing, and CAD design fee. Changes take effect on next calculation.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/50 hover:bg-muted/50">
+                <TableHead>Charge Type</TableHead>
+                <TableHead>Current Value</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoadingSettings ? (
+                <TableRow>
+                  <TableCell colSpan={3} className="text-center py-10">
+                    <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" />
+                  </TableCell>
+                </TableRow>
+              ) : settings ? (
+                <>
+                  <EditableRow
+                    label="Labour Charge"
+                    description="Applied per gram of gold"
+                    currentValue={settings.labourChargePerGram}
+                    unit="/g"
+                    settingKey="labour_charge_per_gram"
+                    onSaved={invalidateSettings}
+                  />
+                  <EditableRow
+                    label="Diamond Price"
+                    description="Applied per carat (center & side diamonds)"
+                    currentValue={settings.diamondPricePerCarat}
+                    unit="/ct"
+                    settingKey="diamond_price_per_carat"
+                    onSaved={invalidateSettings}
+                  />
+                  <EditableRow
+                    label="CAD Design Charge"
+                    description="Flat fee added when CAD toggle is enabled"
+                    currentValue={settings.cadDesignCharge}
+                    unit="flat"
+                    settingKey="cad_design_charge"
+                    onSaved={invalidateSettings}
+                  />
+                  <TableRow>
+                    <TableCell>
+                      <div className="font-medium">Handling Charge</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">Fixed percentage of subtotal</div>
+                    </TableCell>
+                    <TableCell>
+                      <span className="font-mono text-lg">5%</span>
+                      <span className="text-xs text-muted-foreground ml-2">(fixed)</span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <span className="text-xs text-muted-foreground">Not editable</span>
+                    </TableCell>
+                  </TableRow>
+                </>
+              ) : null}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      <Separator />
+      <p className="text-xs text-muted-foreground text-center">
+        All rate changes are persisted immediately and reflected in new calculations.
+      </p>
     </div>
   );
 }

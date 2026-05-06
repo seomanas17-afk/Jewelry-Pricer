@@ -17,6 +17,7 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AppSettings,
   CalculateRequest,
   CalculateResponse,
   ChangePasswordRequest,
@@ -30,6 +31,7 @@ import type {
   PriceHistoryResponse,
   SuccessResponse,
   UpdateMetalPriceRequest,
+  UpdateSettingRequest,
   User,
 } from "./api.schemas";
 
@@ -512,6 +514,168 @@ export const useUpdateMetalPrice = <
   TContext
 > => {
   return useMutation(getUpdateMetalPriceMutationOptions(options));
+};
+
+/**
+ * @summary Get all app settings
+ */
+export const getGetSettingsUrl = () => {
+  return `/api/settings`;
+};
+
+export const getSettings = async (
+  options?: RequestInit,
+): Promise<AppSettings> => {
+  return customFetch<AppSettings>(getGetSettingsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetSettingsQueryKey = () => {
+  return [`/api/settings`] as const;
+};
+
+export const getGetSettingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getSettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetSettingsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getSettings>>> = ({
+    signal,
+  }) => getSettings({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getSettings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetSettingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getSettings>>
+>;
+export type GetSettingsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get all app settings
+ */
+
+export function useGetSettings<
+  TData = Awaited<ReturnType<typeof getSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getSettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetSettingsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update a setting value (Admin only)
+ */
+export const getUpdateSettingUrl = (key: string) => {
+  return `/api/settings/${key}`;
+};
+
+export const updateSetting = async (
+  key: string,
+  updateSettingRequest: UpdateSettingRequest,
+  options?: RequestInit,
+): Promise<AppSettings> => {
+  return customFetch<AppSettings>(getUpdateSettingUrl(key), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateSettingRequest),
+  });
+};
+
+export const getUpdateSettingMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateSetting>>,
+    TError,
+    { key: string; data: BodyType<UpdateSettingRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateSetting>>,
+  TError,
+  { key: string; data: BodyType<UpdateSettingRequest> },
+  TContext
+> => {
+  const mutationKey = ["updateSetting"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateSetting>>,
+    { key: string; data: BodyType<UpdateSettingRequest> }
+  > = (props) => {
+    const { key, data } = props ?? {};
+
+    return updateSetting(key, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateSettingMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateSetting>>
+>;
+export type UpdateSettingMutationBody = BodyType<UpdateSettingRequest>;
+export type UpdateSettingMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Update a setting value (Admin only)
+ */
+export const useUpdateSetting = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateSetting>>,
+    TError,
+    { key: string; data: BodyType<UpdateSettingRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateSetting>>,
+  TError,
+  { key: string; data: BodyType<UpdateSettingRequest> },
+  TContext
+> => {
+  return useMutation(getUpdateSettingMutationOptions(options));
 };
 
 /**
