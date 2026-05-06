@@ -15,6 +15,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, Calculator, Save, RefreshCw, Gem, Activity, Cpu } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -22,13 +23,19 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 
+const PURITY_OPTIONS = ["10K", "14K", "18K", "24K"];
+
 const calculateSchema = z.object({
-  goldWeight: z.coerce.number().min(0.001, "Gold weight required"),
+  metalType: z.enum(["gold", "silver", "platinum"]).default("gold"),
+  metalPurity: z.string().optional(),
+  metalWeight: z.coerce.number().min(0.001, "Metal weight required"),
   centerDiamondWeight: z.coerce.number().min(0, "Invalid"),
   sideDiamondWeight: z.coerce.number().min(0, "Invalid"),
   cadDesignCharges: z.boolean().default(false),
   saveToHistory: z.boolean().default(false),
 });
+
+type FormValues = z.infer<typeof calculateSchema>;
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
@@ -65,6 +72,8 @@ function BreakdownRow({
   );
 }
 
+const METAL_LABELS: Record<string, string> = { gold: "Gold", silver: "Silver", platinum: "Platinum" };
+
 export default function CalculatorPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -81,10 +90,12 @@ export default function CalculatorPage() {
     query: { queryKey: getGetSettingsQueryKey() },
   });
 
-  const form = useForm<z.infer<typeof calculateSchema>>({
+  const form = useForm<FormValues>({
     resolver: zodResolver(calculateSchema),
     defaultValues: {
-      goldWeight: 0,
+      metalType: "gold",
+      metalPurity: undefined,
+      metalWeight: 0,
       centerDiamondWeight: 0,
       sideDiamondWeight: 0,
       cadDesignCharges: false,
@@ -92,7 +103,14 @@ export default function CalculatorPage() {
     },
   });
 
-  function onSubmit(values: z.infer<typeof calculateSchema>) {
+  const selectedMetal = form.watch("metalType");
+  const needsPurity = selectedMetal === "silver" || selectedMetal === "platinum";
+
+  function onSubmit(values: FormValues) {
+    if (needsPurity && !values.metalPurity) {
+      form.setError("metalPurity", { message: "Please select a purity" });
+      return;
+    }
     calculateMutation.mutate(
       { data: values },
       {
@@ -115,7 +133,15 @@ export default function CalculatorPage() {
   }
 
   function handleReset() {
-    form.reset({ goldWeight: 0, centerDiamondWeight: 0, sideDiamondWeight: 0, cadDesignCharges: false, saveToHistory: false });
+    form.reset({
+      metalType: "gold",
+      metalPurity: undefined,
+      metalWeight: 0,
+      centerDiamondWeight: 0,
+      sideDiamondWeight: 0,
+      cadDesignCharges: false,
+      saveToHistory: false,
+    });
     setResult(null);
   }
 
@@ -123,20 +149,18 @@ export default function CalculatorPage() {
     <div className="space-y-8 max-w-6xl mx-auto">
       <div>
         <h1 className="text-3xl font-serif font-bold text-foreground">Jewelry Pricing Terminal</h1>
-        <p className="text-muted-foreground mt-1">Real-time gold jewelry valuation.</p>
+        <p className="text-muted-foreground mt-1">Real-time jewelry valuation for gold, silver, and platinum.</p>
       </div>
 
       {/* Current rates banner */}
       {settings && (
         <div className="flex flex-wrap gap-4 p-3 rounded-lg bg-muted/40 border border-border/50 text-sm">
           <span className="text-muted-foreground">Active Rates:</span>
-          <span className="font-mono font-medium">Gold {formatCurrency(0)}/g</span>
-          <Separator orientation="vertical" className="h-4 self-center" />
           <span className="font-mono font-medium">Labour {formatCurrency(settings.labourChargePerGram)}/g</span>
           <Separator orientation="vertical" className="h-4 self-center" />
           <span className="font-mono font-medium">Diamond {formatCurrency(settings.diamondPricePerCarat)}/ct</span>
           <Separator orientation="vertical" className="h-4 self-center" />
-          <span className="font-mono font-medium">Handling 5%</span>
+          <span className="font-mono font-medium">Handling {settings.handlingChargePercent}%</span>
         </div>
       )}
 
@@ -154,14 +178,79 @@ export default function CalculatorPage() {
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
 
-                  {/* Gold weight */}
+                  {/* Metal type */}
                   <FormField
                     control={form.control}
-                    name="goldWeight"
+                    name="metalType"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Metal Type</FormLabel>
+                        <Select
+                          value={field.value}
+                          onValueChange={(v) => {
+                            field.onChange(v);
+                            form.setValue("metalPurity", undefined);
+                            setResult(null);
+                          }}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="bg-background" data-testid="select-metal-type">
+                              <SelectValue placeholder="Select metal" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="gold">Gold</SelectItem>
+                            <SelectItem value="silver">Silver</SelectItem>
+                            <SelectItem value="platinum">Platinum</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Purity — only for silver / platinum */}
+                  {needsPurity && (
+                    <FormField
+                      control={form.control}
+                      name="metalPurity"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>
+                            {METAL_LABELS[selectedMetal]} Purity
+                          </FormLabel>
+                          <Select
+                            value={field.value ?? ""}
+                            onValueChange={(v) => {
+                              field.onChange(v);
+                              setResult(null);
+                            }}
+                          >
+                            <FormControl>
+                              <SelectTrigger className="bg-background" data-testid="select-purity">
+                                <SelectValue placeholder="Select purity" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {PURITY_OPTIONS.map((p) => (
+                                <SelectItem key={p} value={p}>{p}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+
+                  {/* Metal weight */}
+                  <FormField
+                    control={form.control}
+                    name="metalWeight"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className="flex items-center gap-2">
-                          Gold Weight
+                          {METAL_LABELS[selectedMetal]} Weight
                           <Badge variant="outline" className="font-normal text-xs">grams</Badge>
                         </FormLabel>
                         <FormControl>
@@ -173,7 +262,7 @@ export default function CalculatorPage() {
                               min="0"
                               className="bg-background pl-10"
                               placeholder="0.000"
-                              data-testid="input-gold-weight"
+                              data-testid="input-metal-weight"
                               {...field}
                             />
                           </div>
@@ -299,7 +388,8 @@ export default function CalculatorPage() {
                   <div>
                     <CardTitle className="text-xl font-serif text-primary">Quote Breakdown</CardTitle>
                     <CardDescription>
-                      {result.inputs.goldWeight}g Gold
+                      {result.inputs.metalWeight}g {METAL_LABELS[result.inputs.metalType]}
+                      {result.metalPurity && result.inputs.metalType !== "gold" && ` (${result.metalPurity})`}
                       {(result.inputs.centerDiamondWeight > 0 || result.inputs.sideDiamondWeight > 0) &&
                         ` · ${(result.inputs.centerDiamondWeight + result.inputs.sideDiamondWeight).toFixed(2)}ct diamonds`}
                     </CardDescription>
@@ -319,9 +409,9 @@ export default function CalculatorPage() {
                   </thead>
                   <tbody>
                     <BreakdownRow
-                      label="Gold Metal Value"
-                      sub={`(${result.inputs.goldWeight}g × ${formatCurrency(result.goldPricePerGram)}/g)`}
-                      value={formatCurrency(result.goldValue)}
+                      label={`${METAL_LABELS[result.inputs.metalType]} Metal Value`}
+                      sub={`(${result.inputs.metalWeight}g × ${formatCurrency(result.metalPricePerUnit)}/g)`}
+                      value={formatCurrency(result.metalValue)}
                     />
                     {result.centerDiamondPrice > 0 && (
                       <BreakdownRow
@@ -339,7 +429,7 @@ export default function CalculatorPage() {
                     )}
                     <BreakdownRow
                       label="Labour Cost"
-                      sub={`(${result.inputs.goldWeight}g × ${formatCurrency(result.labourRatePerGram)}/g)`}
+                      sub={`(${result.inputs.metalWeight}g × ${formatCurrency(result.labourRatePerGram)}/g)`}
                       value={formatCurrency(result.labourCost)}
                     />
                     <tr className="border-b border-border/40 bg-muted/20">
@@ -347,7 +437,7 @@ export default function CalculatorPage() {
                       <td className="py-2 text-right font-mono font-semibold">{formatCurrency(result.subtotal)}</td>
                     </tr>
                     <BreakdownRow
-                      label="Handling Charges (5%)"
+                      label={`Handling Charges (${result.handlingChargePercent}%)`}
                       value={formatCurrency(result.handlingCharge)}
                       highlight
                     />
@@ -404,7 +494,10 @@ export default function CalculatorPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <Badge variant="outline" className="capitalize">Gold</Badge>
+                        <Badge variant="outline" className="capitalize">{item.metalType}</Badge>
+                        {item.purity && item.purity !== "standard" && (
+                          <Badge variant="secondary" className="text-xs">{item.purity}</Badge>
+                        )}
                         <span className="text-sm font-medium">{item.metalWeight}g</span>
                         {(item.centerDiamondWeight > 0 || item.sideDiamondWeight > 0) && (
                           <Badge className="bg-primary/10 text-primary hover:bg-primary/20 font-normal border-0">

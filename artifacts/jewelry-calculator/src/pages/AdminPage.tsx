@@ -13,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Loader2, Settings, TrendingUp, BarChart3, Database, Wrench } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -21,7 +22,6 @@ import { Separator } from "@/components/ui/separator";
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
 
-// Reusable inline-edit row for any numeric setting
 function EditableRow({
   label,
   description,
@@ -29,6 +29,7 @@ function EditableRow({
   unit,
   settingKey,
   onSaved,
+  isPercent,
 }: {
   label: string;
   description: string;
@@ -36,6 +37,7 @@ function EditableRow({
   unit: string;
   settingKey: string;
   onSaved: () => void;
+  isPercent?: boolean;
 }) {
   const { toast } = useToast();
   const updateSettingMutation = useUpdateSetting();
@@ -76,11 +78,11 @@ function EditableRow({
       </TableCell>
       <TableCell>
         {editing ? (
-          <div className="flex items-center gap-2 max-w-[160px]">
-            <span className="text-muted-foreground text-sm">$</span>
+          <div className="flex items-center gap-2 max-w-[180px]">
+            {!isPercent && <span className="text-muted-foreground text-sm">$</span>}
             <Input
               type="number"
-              step="0.01"
+              step={isPercent ? "0.1" : "0.01"}
               min="0"
               value={value}
               onChange={(e) => setValue(e.target.value)}
@@ -95,7 +97,7 @@ function EditableRow({
           </div>
         ) : (
           <span className="font-mono text-lg">
-            {formatCurrency(currentValue)}
+            {isPercent ? `${currentValue}%` : formatCurrency(currentValue)}
             <span className="text-xs text-muted-foreground ml-1">{unit}</span>
           </span>
         )}
@@ -118,6 +120,13 @@ function EditableRow({
     </TableRow>
   );
 }
+
+const METAL_ORDER = ["gold", "silver", "platinum"];
+const METAL_BADGE_COLORS: Record<string, string> = {
+  gold: "bg-yellow-500/10 text-yellow-700 border-yellow-500/30",
+  silver: "bg-slate-400/10 text-slate-600 border-slate-400/30",
+  platinum: "bg-blue-400/10 text-blue-700 border-blue-400/30",
+};
 
 export default function AdminPage() {
   const queryClient = useQueryClient();
@@ -145,7 +154,7 @@ export default function AdminPage() {
     setEditPriceValue(current.toString());
   };
 
-  const handleSavePrice = (id: number) => {
+  const handleSavePrice = (id: number, metalType: string) => {
     const num = parseFloat(editPriceValue);
     if (isNaN(num) || num <= 0) {
       toast({ title: "Invalid Price", description: "Enter a valid positive number.", variant: "destructive" });
@@ -155,7 +164,7 @@ export default function AdminPage() {
       { id, data: { pricePerUnit: num } },
       {
         onSuccess: () => {
-          toast({ title: "Gold Price Updated", description: "Rate saved successfully." });
+          toast({ title: "Price Updated", description: `${metalType} rate saved successfully.` });
           queryClient.invalidateQueries({ queryKey: getGetMetalPricesQueryKey() });
           setEditingPriceId(null);
         },
@@ -168,8 +177,11 @@ export default function AdminPage() {
 
   const invalidateSettings = () => queryClient.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
 
-  // Show only the gold/standard entry
-  const goldPrices = metalPrices?.filter((p) => p.metalType === "gold") ?? [];
+  // Group prices by metal type
+  const pricesByMetal = METAL_ORDER.reduce<Record<string, typeof metalPrices>>((acc, metal) => {
+    acc[metal] = metalPrices?.filter((p) => p.metalType === metal) ?? [];
+    return acc;
+  }, {});
 
   return (
     <div className="space-y-8 max-w-5xl mx-auto">
@@ -223,21 +235,23 @@ export default function AdminPage() {
         </Card>
       </div>
 
-      {/* Gold Price */}
+      {/* Metal Prices — all three metals */}
       <Card className="border-border shadow-md">
         <CardHeader className="bg-muted/30 border-b">
           <CardTitle className="flex items-center">
             <Settings className="w-5 h-5 mr-2 text-primary" />
-            Gold Price Configuration
+            Metal Price Configuration
           </CardTitle>
-          <CardDescription>Set the gold price per gram. Used directly in all calculations.</CardDescription>
+          <CardDescription>
+            Set prices per gram for each metal and purity. Gold uses a single standard price; silver and platinum support multiple purities (10K, 14K, 18K, 24K).
+          </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/50 hover:bg-muted/50">
-                <TableHead>Metal</TableHead>
-                <TableHead>Current Price / gram</TableHead>
+                <TableHead>Metal / Purity</TableHead>
+                <TableHead>Price / gram</TableHead>
                 <TableHead>Last Updated</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -249,55 +263,67 @@ export default function AdminPage() {
                     <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" />
                   </TableCell>
                 </TableRow>
-              ) : goldPrices.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-center py-6 text-muted-foreground">No gold price configured.</TableCell>
-                </TableRow>
               ) : (
-                goldPrices.map((price) => (
-                  <TableRow key={price.id} className="group">
-                    <TableCell className="font-medium capitalize">Gold (per gram)</TableCell>
-                    <TableCell>
-                      {editingPriceId === price.id ? (
-                        <div className="flex items-center gap-2 max-w-[160px]">
-                          <span className="text-muted-foreground">$</span>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            value={editPriceValue}
-                            onChange={(e) => setEditPriceValue(e.target.value)}
-                            className="h-8 font-mono bg-background"
-                            autoFocus
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") handleSavePrice(price.id);
-                              if (e.key === "Escape") setEditingPriceId(null);
-                            }}
-                          />
+                METAL_ORDER.map((metal) => {
+                  const entries = pricesByMetal[metal] ?? [];
+                  if (entries.length === 0) return null;
+                  return entries.map((price, idx) => (
+                    <TableRow key={price.id} className="group">
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          {idx === 0 && (
+                            <Badge variant="outline" className={`capitalize text-xs ${METAL_BADGE_COLORS[metal]}`}>
+                              {metal}
+                            </Badge>
+                          )}
+                          {idx > 0 && <span className="w-[56px]" />}
+                          <span className="text-sm text-muted-foreground">
+                            {price.purity === "standard" ? "Standard (per gram)" : price.purity}
+                          </span>
                         </div>
-                      ) : (
-                        <span className="font-mono text-lg">{formatCurrency(price.pricePerUnit)}</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {new Date(price.updatedAt).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {editingPriceId === price.id ? (
-                        <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="sm" onClick={() => setEditingPriceId(null)}>Cancel</Button>
-                          <Button size="sm" onClick={() => handleSavePrice(price.id)} disabled={updatePriceMutation.isPending}>
-                            {updatePriceMutation.isPending && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
-                            Save
+                      </TableCell>
+                      <TableCell>
+                        {editingPriceId === price.id ? (
+                          <div className="flex items-center gap-2 max-w-[160px]">
+                            <span className="text-muted-foreground">$</span>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={editPriceValue}
+                              onChange={(e) => setEditPriceValue(e.target.value)}
+                              className="h-8 font-mono bg-background"
+                              autoFocus
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") handleSavePrice(price.id, metal);
+                                if (e.key === "Escape") setEditingPriceId(null);
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <span className="font-mono text-base">{formatCurrency(price.pricePerUnit)}</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {new Date(price.updatedAt).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {editingPriceId === price.id ? (
+                          <div className="flex justify-end gap-2">
+                            <Button variant="ghost" size="sm" onClick={() => setEditingPriceId(null)}>Cancel</Button>
+                            <Button size="sm" onClick={() => handleSavePrice(price.id, metal)} disabled={updatePriceMutation.isPending}>
+                              {updatePriceMutation.isPending && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
+                              Save
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button variant="outline" size="sm" onClick={() => handleEditPrice(price.id, price.pricePerUnit)} className="opacity-0 group-hover:opacity-100 transition-opacity">
+                            Update Rate
                           </Button>
-                        </div>
-                      ) : (
-                        <Button variant="outline" size="sm" onClick={() => handleEditPrice(price.id, price.pricePerUnit)} className="opacity-0 group-hover:opacity-100 transition-opacity">
-                          Update Rate
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ));
+                })
               )}
             </TableBody>
           </Table>
@@ -312,7 +338,7 @@ export default function AdminPage() {
             Charges Configuration
           </CardTitle>
           <CardDescription>
-            Set labour charges, diamond pricing, and CAD design fee. Changes take effect on next calculation.
+            Set labour charges, diamond pricing, handling percentage, and CAD design fee. Changes take effect on next calculation.
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
@@ -335,7 +361,7 @@ export default function AdminPage() {
                 <>
                   <EditableRow
                     label="Labour Charge"
-                    description="Applied per gram of gold"
+                    description="Applied per gram of metal"
                     currentValue={settings.labourChargePerGram}
                     unit="/g"
                     settingKey="labour_charge_per_gram"
@@ -350,6 +376,15 @@ export default function AdminPage() {
                     onSaved={invalidateSettings}
                   />
                   <EditableRow
+                    label="Handling Charge"
+                    description="Percentage applied on subtotal"
+                    currentValue={settings.handlingChargePercent}
+                    unit="%"
+                    settingKey="handling_charge_percent"
+                    onSaved={invalidateSettings}
+                    isPercent
+                  />
+                  <EditableRow
                     label="CAD Design Charge"
                     description="Flat fee added when CAD toggle is enabled"
                     currentValue={settings.cadDesignCharge}
@@ -357,19 +392,6 @@ export default function AdminPage() {
                     settingKey="cad_design_charge"
                     onSaved={invalidateSettings}
                   />
-                  <TableRow>
-                    <TableCell>
-                      <div className="font-medium">Handling Charge</div>
-                      <div className="text-xs text-muted-foreground mt-0.5">Fixed percentage of subtotal</div>
-                    </TableCell>
-                    <TableCell>
-                      <span className="font-mono text-lg">5%</span>
-                      <span className="text-xs text-muted-foreground ml-2">(fixed)</span>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <span className="text-xs text-muted-foreground">Not editable</span>
-                    </TableCell>
-                  </TableRow>
                 </>
               ) : null}
             </TableBody>

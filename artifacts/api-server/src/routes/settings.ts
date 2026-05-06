@@ -10,9 +10,9 @@ const DEFAULT_SETTINGS = {
   labour_charge_per_gram: 25,
   diamond_price_per_carat: 180,
   cad_design_charge: 80,
+  handling_charge_percent: 5,
 };
 
-// Helper: build AppSettings response from DB rows
 async function buildSettingsResponse() {
   const rows = await db.select().from(appSettingsTable);
   const get = (key: string) => {
@@ -23,16 +23,15 @@ async function buildSettingsResponse() {
     labourChargePerGram: get("labour_charge_per_gram"),
     diamondPricePerCarat: get("diamond_price_per_carat"),
     cadDesignCharge: get("cad_design_charge"),
+    handlingChargePercent: get("handling_charge_percent"),
   };
 }
 
-// GET /api/settings — return all app settings
 router.get("/", requireAuth, async (_req, res) => {
   const settings = await buildSettingsResponse();
   res.json(settings);
 });
 
-// PUT /api/settings/:key — update a single setting (Admin only)
 router.put("/:key", requireAuth, requireAdmin, async (req, res) => {
   const { key } = req.params;
   const validKeys = Object.keys(DEFAULT_SETTINGS);
@@ -53,7 +52,6 @@ router.put("/:key", requireAuth, requireAdmin, async (req, res) => {
     return;
   }
 
-  // Upsert the setting
   const existing = await db.select().from(appSettingsTable).where(eq(appSettingsTable.key, key));
   if (existing.length > 0) {
     await db

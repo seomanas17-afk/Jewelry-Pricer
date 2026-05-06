@@ -69,44 +69,67 @@ export interface UpdateMetalPriceRequest {
 }
 
 export interface AppSettings {
-  /** Labour charge per gram of gold */
+  /** Labour charge per gram of metal */
   labourChargePerGram: number;
   /** Diamond price per carat (applied to both center and side diamonds) */
   diamondPricePerCarat: number;
   /** Fixed CAD design charge amount when enabled */
   cadDesignCharge: number;
+  /** Handling charge as a percentage of subtotal (e.g. 5 means 5%) */
+  handlingChargePercent: number;
 }
 
 export interface UpdateSettingRequest {
   value: number;
 }
 
+/**
+ * Type of metal used
+ */
+export type CalculateRequestMetalType =
+  (typeof CalculateRequestMetalType)[keyof typeof CalculateRequestMetalType];
+
+export const CalculateRequestMetalType = {
+  gold: "gold",
+  silver: "silver",
+  platinum: "platinum",
+} as const;
+
 export interface CalculateRequest {
-  /** Weight of gold in grams */
-  goldWeight: number;
+  /** Type of metal used */
+  metalType: CalculateRequestMetalType;
+  /** Purity label (e.g. 10K, 14K, 18K, 24K). Not required for gold. */
+  metalPurity?: string;
+  /** Weight of metal in grams */
+  metalWeight: number;
   /** Center diamond weight in carats */
   centerDiamondWeight: number;
   /** Side diamond weight in carats */
   sideDiamondWeight: number;
-  /** Whether to include CAD design charges ($80) */
+  /** Whether to include CAD design charges */
   cadDesignCharges?: boolean;
   saveToHistory?: boolean;
 }
 
 export interface CalculateResponse {
-  /** Gold metal value (weight * price/gram) */
-  goldValue: number;
+  /** Metal value (weight * price/unit for selected metal/purity) */
+  metalValue: number;
+  /** Price per gram for the selected metal and purity */
+  metalPricePerUnit: number;
+  /** The purity used for this calculation */
+  metalPurity?: string;
   centerDiamondPrice: number;
   sideDiamondPrice: number;
   labourCost: number;
   subtotal: number;
-  /** 5% of subtotal */
+  /** handlingChargePercent% of subtotal */
   handlingCharge: number;
-  /** Fixed CAD design charge if enabled ($80 or 0) */
+  /** The handling charge percentage used */
+  handlingChargePercent: number;
+  /** Fixed CAD design charge if enabled (or 0) */
   cadDesignCharge: number;
   /** Grand total = subtotal + handlingCharge + cadDesignCharge */
   totalPrice: number;
-  goldPricePerGram: number;
   labourRatePerGram: number;
   diamondPricePerCarat: number;
   inputs: CalculateRequest;

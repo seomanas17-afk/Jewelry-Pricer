@@ -90,7 +90,7 @@ export const UpdateMetalPriceResponse = zod.object({
  * @summary Get all app settings
  */
 export const GetSettingsResponse = zod.object({
-  labourChargePerGram: zod.number().describe("Labour charge per gram of gold"),
+  labourChargePerGram: zod.number().describe("Labour charge per gram of metal"),
   diamondPricePerCarat: zod
     .number()
     .describe(
@@ -99,6 +99,9 @@ export const GetSettingsResponse = zod.object({
   cadDesignCharge: zod
     .number()
     .describe("Fixed CAD design charge amount when enabled"),
+  handlingChargePercent: zod
+    .number()
+    .describe("Handling charge as a percentage of subtotal (e.g. 5 means 5%)"),
 });
 
 /**
@@ -113,7 +116,7 @@ export const UpdateSettingBody = zod.object({
 });
 
 export const UpdateSettingResponse = zod.object({
-  labourChargePerGram: zod.number().describe("Labour charge per gram of gold"),
+  labourChargePerGram: zod.number().describe("Labour charge per gram of metal"),
   diamondPricePerCarat: zod
     .number()
     .describe(
@@ -122,40 +125,70 @@ export const UpdateSettingResponse = zod.object({
   cadDesignCharge: zod
     .number()
     .describe("Fixed CAD design charge amount when enabled"),
+  handlingChargePercent: zod
+    .number()
+    .describe("Handling charge as a percentage of subtotal (e.g. 5 means 5%)"),
 });
 
 /**
  * @summary Calculate jewelry price
  */
 export const CalculatePriceBody = zod.object({
-  goldWeight: zod.number().describe("Weight of gold in grams"),
+  metalType: zod
+    .enum(["gold", "silver", "platinum"])
+    .describe("Type of metal used"),
+  metalPurity: zod
+    .string()
+    .optional()
+    .describe("Purity label (e.g. 10K, 14K, 18K, 24K). Not required for gold."),
+  metalWeight: zod.number().describe("Weight of metal in grams"),
   centerDiamondWeight: zod.number().describe("Center diamond weight in carats"),
   sideDiamondWeight: zod.number().describe("Side diamond weight in carats"),
   cadDesignCharges: zod
     .boolean()
     .optional()
-    .describe("Whether to include CAD design charges ($80)"),
+    .describe("Whether to include CAD design charges"),
   saveToHistory: zod.boolean().optional(),
 });
 
 export const CalculatePriceResponse = zod.object({
-  goldValue: zod.number().describe("Gold metal value (weight \* price\/gram)"),
+  metalValue: zod
+    .number()
+    .describe("Metal value (weight \* price\/unit for selected metal\/purity)"),
+  metalPricePerUnit: zod
+    .number()
+    .describe("Price per gram for the selected metal and purity"),
+  metalPurity: zod
+    .string()
+    .optional()
+    .describe("The purity used for this calculation"),
   centerDiamondPrice: zod.number(),
   sideDiamondPrice: zod.number(),
   labourCost: zod.number(),
   subtotal: zod.number(),
-  handlingCharge: zod.number().describe("5% of subtotal"),
+  handlingCharge: zod.number().describe("handlingChargePercent% of subtotal"),
+  handlingChargePercent: zod
+    .number()
+    .describe("The handling charge percentage used"),
   cadDesignCharge: zod
     .number()
-    .describe("Fixed CAD design charge if enabled ($80 or 0)"),
+    .describe("Fixed CAD design charge if enabled (or 0)"),
   totalPrice: zod
     .number()
     .describe("Grand total = subtotal + handlingCharge + cadDesignCharge"),
-  goldPricePerGram: zod.number(),
   labourRatePerGram: zod.number(),
   diamondPricePerCarat: zod.number(),
   inputs: zod.object({
-    goldWeight: zod.number().describe("Weight of gold in grams"),
+    metalType: zod
+      .enum(["gold", "silver", "platinum"])
+      .describe("Type of metal used"),
+    metalPurity: zod
+      .string()
+      .optional()
+      .describe(
+        "Purity label (e.g. 10K, 14K, 18K, 24K). Not required for gold.",
+      ),
+    metalWeight: zod.number().describe("Weight of metal in grams"),
     centerDiamondWeight: zod
       .number()
       .describe("Center diamond weight in carats"),
@@ -163,7 +196,7 @@ export const CalculatePriceResponse = zod.object({
     cadDesignCharges: zod
       .boolean()
       .optional()
-      .describe("Whether to include CAD design charges ($80)"),
+      .describe("Whether to include CAD design charges"),
     saveToHistory: zod.boolean().optional(),
   }),
 });
