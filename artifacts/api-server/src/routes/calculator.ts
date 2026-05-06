@@ -7,17 +7,19 @@ import { CalculatePriceBody } from "@workspace/api-zod";
 const router = Router();
 
 /**
- * Purity factors (karat / 24):
- *   10K → 10/24 ≈ 0.4167
- *   14K → 14/24 ≈ 0.5833
- *   18K → 18/24 = 0.7500
+ * Purity applies ONLY to Gold with exact user-defined factors:
+ *   10K → 0.45
+ *   14K → 0.65
+ *   18K → 0.75
+ *
+ * Silver and Platinum use the base price directly (factor = 1.0, no purity selection).
  *
  * Admin sets a single BASE price per gram for each metal (purity = "standard").
- * The calculator applies the purity factor to that base price:
- *   effectivePricePerGram = basePricePerGram × (karat / 24)
- *   metalValue            = metalWeight × effectivePricePerGram
+ * For Gold: effectivePricePerGram = basePricePerGram × purityFactor
+ * For Silver/Platinum: effectivePricePerGram = basePricePerGram (factor = 1)
  *
  * Full formula:
+ *   metalValue     = metalWeight × effectivePricePerGram
  *   labourCost     = labourChargePerGram × metalWeight
  *   subtotal       = metalValue + centerDiamondPrice + sideDiamondPrice + labourCost
  *   handlingCharge = subtotal × (handlingChargePercent / 100)
@@ -25,10 +27,10 @@ const router = Router();
  *   grandTotal     = subtotal + handlingCharge + cadCharge
  */
 
-const PURITY_FACTORS: Record<string, number> = {
-  "10K": 10 / 24,
-  "14K": 14 / 24,
-  "18K": 18 / 24,
+const GOLD_PURITY_FACTORS: Record<string, number> = {
+  "10K": 0.45,
+  "14K": 0.65,
+  "18K": 0.75,
 };
 
 router.post("/calculate", requireAuth, async (req, res) => {
@@ -41,13 +43,15 @@ router.post("/calculate", requireAuth, async (req, res) => {
   const { metalType, metalPurity, metalWeight, centerDiamondWeight, sideDiamondWeight, cadDesignCharges, saveToHistory } =
     parsed.data;
 
-  // Purity is required for all metals
-  if (!metalPurity || !(metalPurity in PURITY_FACTORS)) {
-    res.status(400).json({ error: "metalPurity must be one of: 10K, 14K, 18K" });
-    return;
+  // Purity required only for Gold
+  let purityFactor = 1;
+  if (metalType === "gold") {
+    if (!metalPurity || !(metalPurity in GOLD_PURITY_FACTORS)) {
+      res.status(400).json({ error: "metalPurity must be one of: 10K, 14K, 18K when metalType is gold" });
+      return;
+    }
+    purityFactor = GOLD_PURITY_FACTORS[metalPurity];
   }
-
-  const purityFactor = PURITY_FACTORS[metalPurity];
 
   // Fetch the base (standard) price for the selected metal
   const [metalPriceRow] = await db

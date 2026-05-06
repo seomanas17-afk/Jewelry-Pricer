@@ -23,23 +23,27 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 
-// Purity options with exact karat/24 factors
+// Purity options — Gold only, with exact user-defined factors
 const PURITY_OPTIONS = [
-  { label: "10K (41.67%)", value: "10K", factor: 10 / 24 },
-  { label: "14K (58.33%)", value: "14K", factor: 14 / 24 },
-  { label: "18K (75.00%)", value: "18K", factor: 18 / 24 },
+  { label: "10K (×0.45)", value: "10K", factor: 0.45 },
+  { label: "14K (×0.65)", value: "14K", factor: 0.65 },
+  { label: "18K (×0.75)", value: "18K", factor: 0.75 },
 ];
 
 const METAL_LABELS: Record<string, string> = { gold: "Gold", silver: "Silver", platinum: "Platinum" };
 
 const calculateSchema = z.object({
   metalType: z.enum(["gold", "silver", "platinum"]).default("gold"),
-  metalPurity: z.enum(["10K", "14K", "18K"]),
+  metalPurity: z.enum(["10K", "14K", "18K"]).optional(),
   metalWeight: z.coerce.number().min(0.001, "Metal weight required"),
   centerDiamondWeight: z.coerce.number().min(0, "Invalid"),
   sideDiamondWeight: z.coerce.number().min(0, "Invalid"),
   cadDesignCharges: z.boolean().default(false),
   saveToHistory: z.boolean().default(false),
+}).superRefine((data, ctx) => {
+  if (data.metalType === "gold" && !data.metalPurity) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please select a purity", path: ["metalPurity"] });
+  }
 });
 
 type FormValues = z.infer<typeof calculateSchema>;
@@ -111,6 +115,7 @@ export default function CalculatorPage() {
   const selectedMetal = form.watch("metalType");
   const selectedPurity = form.watch("metalPurity");
   const purityInfo = PURITY_OPTIONS.find((p) => p.value === selectedPurity);
+  const isGold = selectedMetal === "gold";
 
   function onSubmit(values: FormValues) {
     calculateMutation.mutate(
@@ -137,7 +142,7 @@ export default function CalculatorPage() {
   function handleReset() {
     form.reset({
       metalType: "gold",
-      metalPurity: "14K",
+      metalPurity: undefined,
       metalWeight: 0,
       centerDiamondWeight: 0,
       sideDiamondWeight: 0,
@@ -189,7 +194,12 @@ export default function CalculatorPage() {
                         <FormLabel>Metal Type</FormLabel>
                         <Select
                           value={field.value}
-                          onValueChange={(v) => { field.onChange(v); setResult(null); }}
+                          onValueChange={(v) => {
+                            field.onChange(v);
+                            // Clear purity when switching away from gold
+                            if (v !== "gold") form.setValue("metalPurity", undefined);
+                            setResult(null);
+                          }}
                         >
                           <FormControl>
                             <SelectTrigger className="bg-background" data-testid="select-metal-type">
@@ -207,37 +217,39 @@ export default function CalculatorPage() {
                     )}
                   />
 
-                  {/* Purity — all metals use 10K / 14K / 18K */}
-                  <FormField
-                    control={form.control}
-                    name="metalPurity"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{METAL_LABELS[selectedMetal]} Purity</FormLabel>
-                        <Select
-                          value={field.value}
-                          onValueChange={(v) => { field.onChange(v); setResult(null); }}
-                        >
-                          <FormControl>
-                            <SelectTrigger className="bg-background" data-testid="select-purity">
-                              <SelectValue placeholder="Select purity" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {PURITY_OPTIONS.map((p) => (
-                              <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {purityInfo && (
-                          <p className="text-xs text-muted-foreground">
-                            Formula: base price × {purityInfo.value.replace("K", "")}/24 = ×{purityInfo.factor.toFixed(4)}
-                          </p>
-                        )}
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  {/* Purity — Gold only */}
+                  {isGold && (
+                    <FormField
+                      control={form.control}
+                      name="metalPurity"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Gold Purity</FormLabel>
+                          <Select
+                            value={field.value ?? ""}
+                            onValueChange={(v) => { field.onChange(v); setResult(null); }}
+                          >
+                            <FormControl>
+                              <SelectTrigger className="bg-background" data-testid="select-purity">
+                                <SelectValue placeholder="Select purity" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {PURITY_OPTIONS.map((p) => (
+                                <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {purityInfo && (
+                            <p className="text-xs text-muted-foreground">
+                              Effective price = base price × {purityInfo.factor}
+                            </p>
+                          )}
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
 
                   {/* Metal weight */}
                   <FormField
@@ -382,7 +394,8 @@ export default function CalculatorPage() {
                   <div>
                     <CardTitle className="text-xl font-serif text-primary">Quote Breakdown</CardTitle>
                     <CardDescription>
-                      {result.inputs.metalWeight}g {METAL_LABELS[result.inputs.metalType]} ({result.metalPurity})
+                      {result.inputs.metalWeight}g {METAL_LABELS[result.inputs.metalType]}
+                      {result.inputs.metalType === "gold" && result.metalPurity && ` (${result.metalPurity})`}
                       {(result.inputs.centerDiamondWeight > 0 || result.inputs.sideDiamondWeight > 0) &&
                         ` · ${(result.inputs.centerDiamondWeight + result.inputs.sideDiamondWeight).toFixed(2)}ct diamonds`}
                     </CardDescription>
@@ -403,7 +416,11 @@ export default function CalculatorPage() {
                   <tbody>
                     <BreakdownRow
                       label={`${METAL_LABELS[result.inputs.metalType]} Metal Value`}
-                      sub={`(${result.inputs.metalWeight}g × ${formatCurrency(result.metalPricePerUnit)}/g · ${result.metalPurity})`}
+                      sub={
+                        result.inputs.metalType === "gold" && result.metalPurity
+                          ? `(${result.inputs.metalWeight}g × ${formatCurrency(result.metalPricePerUnit)}/g · ${result.metalPurity})`
+                          : `(${result.inputs.metalWeight}g × ${formatCurrency(result.metalPricePerUnit)}/g)`
+                      }
                       value={formatCurrency(result.metalValue)}
                     />
                     {result.centerDiamondPrice > 0 && (
