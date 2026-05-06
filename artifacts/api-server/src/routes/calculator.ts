@@ -80,8 +80,8 @@ router.post("/calculate", requireAuth, async (req, res) => {
   const cadDesignChargeAmount = getSetting("cad_design_charge", 80);
   const handlingChargePercent = getSetting("handling_charge_percent", 5);
 
-  // Apply formulas
-  const metalValue = metalWeight * effectivePricePerGram;
+  // Apply formulas — metal value always divided by 75
+  const metalValue = (metalWeight * effectivePricePerGram) / 75;
   const centerDiamondPrice = centerDiamondWeight * diamondPricePerCarat;
   const sideDiamondPrice = sideDiamondWeight * diamondPricePerCarat;
   const labourCost = labourRatePerGram * metalWeight;

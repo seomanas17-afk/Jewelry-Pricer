@@ -242,7 +242,7 @@ export default function CalculatorPage() {
                           </Select>
                           {purityInfo && (
                             <p className="text-xs text-muted-foreground">
-                              Effective price = base price × {purityInfo.factor}
+                              Effective price = base price × {purityInfo.factor} ÷ 75
                             </p>
                           )}
                           <FormMessage />
