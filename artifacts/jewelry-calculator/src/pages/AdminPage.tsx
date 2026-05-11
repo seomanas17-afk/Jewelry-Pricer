@@ -380,6 +380,14 @@ export default function AdminPage() {
                     settingKey="cad_design_charge"
                     onSaved={invalidateSettings}
                   />
+                  <EditableRow
+                    label="Metal Value Divisor"
+                    description="Divides the raw metal value (weight × price × purity factor) — default 75"
+                    currentValue={settings.metalValueDivisor}
+                    unit="÷"
+                    settingKey="metal_value_divisor"
+                    onSaved={invalidateSettings}
+                  />
                 </>
               ) : null}
             </TableBody>

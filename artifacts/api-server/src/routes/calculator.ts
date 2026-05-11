@@ -79,9 +79,10 @@ router.post("/calculate", requireAuth, async (req, res) => {
   const diamondPricePerCarat = getSetting("diamond_price_per_carat", 180);
   const cadDesignChargeAmount = getSetting("cad_design_charge", 80);
   const handlingChargePercent = getSetting("handling_charge_percent", 5);
+  const metalValueDivisor = getSetting("metal_value_divisor", 75);
 
-  // Apply formulas — metal value always divided by 75
-  const metalValue = (metalWeight * effectivePricePerGram) / 75;
+  // Apply formulas — metal value divided by admin-configurable divisor
+  const metalValue = (metalWeight * effectivePricePerGram) / metalValueDivisor;
   const centerDiamondPrice = centerDiamondWeight * diamondPricePerCarat;
   const sideDiamondPrice = sideDiamondWeight * diamondPricePerCarat;
   const labourCost = labourRatePerGram * metalWeight;

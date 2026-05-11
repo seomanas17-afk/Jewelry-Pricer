@@ -11,6 +11,7 @@ const DEFAULT_SETTINGS = {
   diamond_price_per_carat: 180,
   cad_design_charge: 80,
   handling_charge_percent: 5,
+  metal_value_divisor: 75,
 };
 
 async function buildSettingsResponse() {
@@ -24,6 +25,7 @@ async function buildSettingsResponse() {
     diamondPricePerCarat: get("diamond_price_per_carat"),
     cadDesignCharge: get("cad_design_charge"),
     handlingChargePercent: get("handling_charge_percent"),
+    metalValueDivisor: get("metal_value_divisor"),
   };
 }
 

@@ -398,11 +398,15 @@ components:
         handlingChargePercent:
           type: number
           description: Handling charge as a percentage of subtotal (e.g. 5 means 5%)
+        metalValueDivisor:
+          type: number
+          description: Divisor applied to metal value in calculation (metalWeight × pricePerGram × purityFactor ÷ divisor)
       required:
         - labourChargePerGram
         - diamondPricePerCarat
         - cadDesignCharge
         - handlingChargePercent
+        - metalValueDivisor
 
     UpdateSettingRequest:
       type: object

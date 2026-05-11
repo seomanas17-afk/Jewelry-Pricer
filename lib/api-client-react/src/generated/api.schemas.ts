@@ -77,6 +77,8 @@ export interface AppSettings {
   cadDesignCharge: number;
   /** Handling charge as a percentage of subtotal (e.g. 5 means 5%) */
   handlingChargePercent: number;
+  /** Divisor applied to metal value in calculation (metalWeight × pricePerGram × purityFactor ÷ divisor) */
+  metalValueDivisor: number;
 }
 
 export interface UpdateSettingRequest {

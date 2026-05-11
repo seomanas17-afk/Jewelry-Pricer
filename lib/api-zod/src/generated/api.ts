@@ -102,6 +102,11 @@ export const GetSettingsResponse = zod.object({
   handlingChargePercent: zod
     .number()
     .describe("Handling charge as a percentage of subtotal (e.g. 5 means 5%)"),
+  metalValueDivisor: zod
+    .number()
+    .describe(
+      "Divisor applied to metal value in calculation (metalWeight × pricePerGram × purityFactor ÷ divisor)",
+    ),
 });
 
 /**
@@ -128,6 +133,11 @@ export const UpdateSettingResponse = zod.object({
   handlingChargePercent: zod
     .number()
     .describe("Handling charge as a percentage of subtotal (e.g. 5 means 5%)"),
+  metalValueDivisor: zod
+    .number()
+    .describe(
+      "Divisor applied to metal value in calculation (metalWeight × pricePerGram × purityFactor ÷ divisor)",
+    ),
 });
 
 /**
