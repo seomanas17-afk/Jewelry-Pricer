@@ -253,6 +253,27 @@ paths:
               schema:
                 $ref: "#/components/schemas/PriceHistoryResponse"
 
+  /history/{id}:
+    delete:
+      operationId: deleteHistoryItem
+      tags: [history]
+      summary: Delete a history item by ID (admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted successfully
+        "403":
+          description: Forbidden
+        "404":
+          description: Not found
+
   /history/stats:
     get:
       operationId: getHistoryStats

@@ -20,7 +20,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
 
 const formatCurrency = (value: number) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
+  new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(value);
 
 const METAL_DISPLAY: Record<string, { label: string; badge: string; description: string }> = {
   gold:     { label: "Gold",     badge: "bg-yellow-500/10 text-yellow-700 border-yellow-500/30", description: "Base price per gram (pure). Purity factor applied in calculator." },
@@ -232,9 +232,6 @@ export default function AdminPage() {
             <Settings className="w-5 h-5 mr-2 text-primary" />
             Metal Price Configuration
           </CardTitle>
-          <CardDescription>
-            Set the base price per gram for each metal. The calculator automatically applies the karat purity factor (10K = 41.67%, 14K = 58.33%, 18K = 75%).
-          </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
@@ -273,7 +270,7 @@ export default function AdminPage() {
                       <TableCell>
                         {editingPriceId === price.id ? (
                           <div className="flex items-center gap-2 max-w-[160px]">
-                            <span className="text-muted-foreground">$</span>
+                            <span className="text-muted-foreground">₹</span>
                             <Input
                               type="number"
                               step="0.01"

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db, priceHistoryTable } from "@workspace/db";
-import { eq, desc, count, avg, sql } from "drizzle-orm";
-import { requireAuth } from "../middlewares/auth.js";
+import { eq, desc, count, avg } from "drizzle-orm";
+import { requireAuth, requireAdmin } from "../middlewares/auth.js";
 import { GetPriceHistoryQueryParams } from "@workspace/api-zod";
 
 const router = Router();
@@ -42,6 +42,27 @@ router.get("/", requireAuth, async (req, res) => {
       breakdown: h.breakdown,
     })),
   });
+});
+
+// DELETE /api/history/:id — admin only
+router.delete("/:id", requireAuth, requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+
+  const [deleted] = await db
+    .delete(priceHistoryTable)
+    .where(eq(priceHistoryTable.id, id))
+    .returning();
+
+  if (!deleted) {
+    res.status(404).json({ error: "History item not found" });
+    return;
+  }
+
+  res.status(204).send();
 });
 
 // GET /api/history/stats — aggregated stats for current user

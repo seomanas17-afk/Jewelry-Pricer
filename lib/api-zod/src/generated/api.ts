@@ -241,6 +241,13 @@ export const GetPriceHistoryResponse = zod.object({
 });
 
 /**
+ * @summary Delete a history item by ID (admin only)
+ */
+export const DeleteHistoryItemParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
  * @summary Get aggregated stats from calculation history
  */
 export const GetHistoryStatsResponse = zod.object({

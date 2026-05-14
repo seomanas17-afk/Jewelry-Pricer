@@ -859,6 +859,90 @@ export function useGetPriceHistory<
 }
 
 /**
+ * @summary Delete a history item by ID (admin only)
+ */
+export const getDeleteHistoryItemUrl = (id: number) => {
+  return `/api/history/${id}`;
+};
+
+export const deleteHistoryItem = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteHistoryItemUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteHistoryItemMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteHistoryItem>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteHistoryItem>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteHistoryItem"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteHistoryItem>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteHistoryItem(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteHistoryItemMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteHistoryItem>>
+>;
+
+export type DeleteHistoryItemMutationError = ErrorType<void>;
+
+/**
+ * @summary Delete a history item by ID (admin only)
+ */
+export const useDeleteHistoryItem = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteHistoryItem>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteHistoryItem>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteHistoryItemMutationOptions(options));
+};
+
+/**
  * @summary Get aggregated stats from calculation history
  */
 export const getGetHistoryStatsUrl = () => {
