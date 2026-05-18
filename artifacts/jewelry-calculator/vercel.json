@@ -2,7 +2,7 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "https://jewelry-pricer-api-server-rcob3jpnw-gem1-s-projects.vercel.app/api/$1"
+      "dest": "https://jewelry-pricer-api-server-9nw43jrub-gem1-s-projects.vercel.app/api/$1"
     },
     {
       "handle": "filesystem"
