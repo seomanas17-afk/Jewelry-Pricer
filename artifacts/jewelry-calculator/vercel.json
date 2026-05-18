@@ -1,8 +1,15 @@
 {
-  "rewrites": [
+  "routes": [
     {
-      "source": "/api/:path*",
-      "destination": "https://jewelry-pricer-api-server-rcob3jpnw-gem1-s-projects.vercel.app/api/:path*"
+      "src": "/api/(.*)",
+      "dest": "https://jewelry-pricer-api-server-rcob3jpnw-gem1-s-projects.vercel.app/api/$1"
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
     }
   ]
 }
